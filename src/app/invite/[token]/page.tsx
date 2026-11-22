@@ -18,7 +18,7 @@ export default async function InvitePage({ params, searchParams }: { params: { t
   return (
     <main className="mx-auto flex min-h-screen max-w-md flex-col justify-center gap-6 px-4 py-10">
       {/* Same dark card as the sign-in page: #282D30, 12px corners, subtle shadow. Everything sits inside it. */}
-      <div className="flex flex-col gap-4 rounded-[12px] bg-header p-6 text-header-ink shadow-[0_4px_16px_rgba(0,0,0,0.15)] [&_:focus-visible]:outline-brand">
+      <div className="flex flex-col gap-4 rounded-[12px] bg-header px-6 py-10 text-header-ink shadow-[0_4px_16px_rgba(0,0,0,0.15)] [&_:focus-visible]:outline-brand">
         <Logo height={56} />
         {!invite ? (
           <>
