@@ -17,19 +17,19 @@ export default async function InvitePage({ params, searchParams }: { params: { t
 
   return (
     <main className="mx-auto flex min-h-screen max-w-md flex-col justify-center gap-6 px-4 py-10">
-      <Logo height={56} />
-      {!invite ? (
-        <>
-          <h1 className="text-2xl font-semibold">This invite link no longer works</h1>
-          <p>Invite links work once and expire after {INVITE_DAYS} days. Ask an administrator to send you a new one.</p>
-        </>
-      ) : (
-        <>
-          <h1 className="text-2xl font-semibold">Welcome, {invite.name}</h1>
-          <p className="text-sm text-ink-muted">Set up sign-in for {invite.email}.</p>
-          {error && <p role="alert" className="rounded border border-danger bg-white p-3 text-sm text-danger">{error}</p>}
-          {/* Same dark card as the sign-in page: #282D30, 12px corners, subtle shadow. */}
-          <div className="flex flex-col gap-4 rounded-[12px] bg-header p-6 text-header-ink shadow-[0_4px_16px_rgba(0,0,0,0.15)] [&_:focus-visible]:outline-brand">
+      {/* Same dark card as the sign-in page: #282D30, 12px corners, subtle shadow. Everything sits inside it. */}
+      <div className="flex flex-col gap-4 rounded-[12px] bg-header p-6 text-header-ink shadow-[0_4px_16px_rgba(0,0,0,0.15)] [&_:focus-visible]:outline-brand">
+        <Logo height={56} />
+        {!invite ? (
+          <>
+            <h1 className="text-2xl font-semibold">This invite link no longer works</h1>
+            <p>Invite links work once and expire after {INVITE_DAYS} days. Ask an administrator to send you a new one.</p>
+          </>
+        ) : (
+          <>
+            <h1 className="text-2xl font-semibold">Welcome, {invite.name}</h1>
+            <p className="text-sm opacity-80">Set up sign-in for {invite.email}.</p>
+            {error && <p role="alert" className="rounded border border-danger bg-white p-3 text-sm text-danger">{error}</p>}
             <form action={acceptWithPassword.bind(null, params.token)} className="flex flex-col gap-4">
               <label className="flex flex-col gap-1 text-sm font-medium">Choose a password (10 characters or more)
                 <input name="password" type="password" required minLength={10} autoComplete="new-password" className="rounded border border-line bg-white px-3 py-2 font-normal text-ink" />
@@ -44,9 +44,9 @@ export default async function InvitePage({ params, searchParams }: { params: { t
                 Or continue with Google
               </a>
             )}
-          </div>
-        </>
-      )}
+          </>
+        )}
+      </div>
     </main>
   );
 }
