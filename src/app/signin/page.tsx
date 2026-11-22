@@ -21,12 +21,17 @@ export default async function SignInPage({ searchParams }: { searchParams: { err
       <Logo height={56} />
       <h1 className="text-2xl font-semibold">Staff portal sign-in</h1>
       {error && <p role="alert" className="rounded border border-danger bg-white p-3 text-sm text-danger">{error}</p>}
-      <form action={signIn} className="flex flex-col gap-3 rounded-lg border border-line bg-surface-raised p-4">
+      {/* Brand dark card (#282D30 via the --header token), 12px corners, subtle shadow.
+          Light-green focus ring so keyboard focus stays visible on the dark background. */}
+      <form
+        action={signIn}
+        className="flex flex-col gap-4 rounded-[12px] bg-header p-6 text-header-ink shadow-[0_4px_16px_rgba(0,0,0,0.15)] [&_:focus-visible]:outline-brand"
+      >
         <label className="flex flex-col gap-1 text-sm font-medium">Email
-          <input name="email" type="email" required autoComplete="username" className="rounded border border-line px-3 py-2 font-normal" />
+          <input name="email" type="email" required autoComplete="username" className="rounded border border-line bg-white px-3 py-2 font-normal text-ink" />
         </label>
         <label className="flex flex-col gap-1 text-sm font-medium">Password
-          <input name="password" type="password" required autoComplete="current-password" className="rounded border border-line px-3 py-2 font-normal" />
+          <input name="password" type="password" required autoComplete="current-password" className="rounded border border-line bg-white px-3 py-2 font-normal text-ink" />
         </label>
         <button className="rounded bg-brand px-4 py-2 font-medium text-brand-ink hover:bg-brand-dark">Sign in</button>
       </form>
