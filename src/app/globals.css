@@ -1,0 +1,46 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/*
+ * DESIGN TOKENS: the one place to apply the Jscapes brand.
+ * Every value marked PLACEHOLDER is a neutral stand-in, not a final brand colour.
+ * Replace with the supplied brand colours and logo when available.
+ */
+:root {
+  /* Supplied brand colours: #282D30 (dark), #38BB86 (green), white. */
+  --header: #282D30;
+  --header-ink: #ffffff;
+
+  --brand: #38BB86;
+  --brand-ink: #282D30;      /* text on green: white fails contrast on this green */
+  /* Derived shades (not supplied): hover, soft tint, and a darker green for
+     green TEXT on white, which #38BB86 itself is too light for (accessibility). */
+  --brand-dark: #2FA374;
+  --brand-soft: #E6F6EF;
+  --brand-text: #1C7552;
+
+  --surface: #f5f7f7;
+  --surface-raised: #ffffff;
+  --ink: #282D30;
+  --ink-muted: #5a6266;
+  --line: #d8dddf;
+  --danger: #a32121;
+
+  /* Event type colours: functional, not brand. Labels and symbols always accompany them. */
+  --ev-management: #7a3fa0;
+  --ev-social: #c0561b;
+  --ev-meeting: #2674bc;
+  --ev-birthday: #a3295f;
+
+  --font-sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+}
+
+html { -webkit-text-size-adjust: 100%; }
+body { background: var(--surface); color: var(--ink); font-family: var(--font-sans); }
+
+:focus-visible { outline: 3px solid var(--brand-text); outline-offset: 2px; }
+
+@media (prefers-reduced-motion: reduce) {
+  * { animation: none !important; transition: none !important; scroll-behavior: auto !important; }
+}
