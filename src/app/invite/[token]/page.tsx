@@ -28,20 +28,23 @@ export default async function InvitePage({ params, searchParams }: { params: { t
           <h1 className="text-2xl font-semibold">Welcome, {invite.name}</h1>
           <p className="text-sm text-ink-muted">Set up sign-in for {invite.email}.</p>
           {error && <p role="alert" className="rounded border border-danger bg-white p-3 text-sm text-danger">{error}</p>}
-          <form action={acceptWithPassword.bind(null, params.token)} className="flex flex-col gap-3 rounded-lg border border-line bg-surface-raised p-4">
-            <label className="flex flex-col gap-1 text-sm font-medium">Choose a password (10 characters or more)
-              <input name="password" type="password" required minLength={10} autoComplete="new-password" className="rounded border border-line px-3 py-2 font-normal" />
-            </label>
-            <label className="flex flex-col gap-1 text-sm font-medium">Repeat the password
-              <input name="confirm" type="password" required minLength={10} autoComplete="new-password" className="rounded border border-line px-3 py-2 font-normal" />
-            </label>
-            <button className="rounded bg-brand px-4 py-2 font-medium text-brand-ink hover:bg-brand-dark">Save password and sign in</button>
-          </form>
-          {googleEnabled() && (
-            <a href={`/auth/google?invite=${encodeURIComponent(params.token)}`} className="rounded border border-line bg-surface-raised px-4 py-2 text-center font-medium hover:bg-brand-soft">
-              Or continue with Google
-            </a>
-          )}
+          {/* Same dark card as the sign-in page: #282D30, 12px corners, subtle shadow. */}
+          <div className="flex flex-col gap-4 rounded-[12px] bg-header p-6 text-header-ink shadow-[0_4px_16px_rgba(0,0,0,0.15)] [&_:focus-visible]:outline-brand">
+            <form action={acceptWithPassword.bind(null, params.token)} className="flex flex-col gap-4">
+              <label className="flex flex-col gap-1 text-sm font-medium">Choose a password (10 characters or more)
+                <input name="password" type="password" required minLength={10} autoComplete="new-password" className="rounded border border-line bg-white px-3 py-2 font-normal text-ink" />
+              </label>
+              <label className="flex flex-col gap-1 text-sm font-medium">Repeat the password
+                <input name="confirm" type="password" required minLength={10} autoComplete="new-password" className="rounded border border-line bg-white px-3 py-2 font-normal text-ink" />
+              </label>
+              <button className="rounded bg-brand px-4 py-2 font-medium text-brand-ink hover:bg-brand-dark">Save password and sign in</button>
+            </form>
+            {googleEnabled() && (
+              <a href={`/auth/google?invite=${encodeURIComponent(params.token)}`} className="rounded border border-white/60 px-4 py-2 text-center font-medium hover:bg-white/10">
+                Or continue with Google
+              </a>
+            )}
+          </div>
         </>
       )}
     </main>
