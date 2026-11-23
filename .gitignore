@@ -7,3 +7,5 @@ out
 *.tsbuildinfo
 next-env.d.ts
 .DS_Store
+# local uploaded files (development only)
+.data

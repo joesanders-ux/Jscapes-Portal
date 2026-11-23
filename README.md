@@ -14,9 +14,11 @@ Built:
 - **Settings > Users (admins):** add users, copy a one-time invite link to send yourself, reset sign-in with a new link,
   change role, deactivate/reactivate (deactivating signs them out immediately)
 - Dashboard with team bulletin; Team calendar (week/month, four event types)
+- **Health and Safety** (visible to everyone): admins upload PDFs and new versions; staff open them. One version is marked
+  current, previous versions are kept. Files are served only to signed-in users
 - PostgreSQL migrations and a demo-data seed
 
-Not built yet: Van Compliance, Equipment Maintenance, Timesheets, Health and Safety, Policies, Availability, Shifts,
+Not built yet: Van Compliance, Equipment Maintenance, Timesheets, staff acknowledgement/signing of Health and Safety documents, Policies, Availability, Shifts,
 Job Images, section on/off switches, SMS and in-app notifications, ServiceM8 dashboard tiles, PAE Weed Spraying Logbook and calculators.
 
 ## Local development
@@ -48,6 +50,7 @@ Environment variables:
 | `DATABASE_URL` | Yes | From the Railway PostgreSQL service (server-side only) |
 | `APP_URL` | Yes | `https://staff.jscapesgls.com`. Builds invite links and the Google redirect address |
 | `DATABASE_SSL` | If required | `true` only if your connection needs SSL |
+| `FILES_DIR` | Yes, for uploads | Folder on a Railway Volume, e.g. `/data/uploads`. Without it, uploads are refused in production |
 | `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` | For Google sign-in | Leave unset to hide the Google button |
 
 `railway.json` runs `npm run migrate` before each deploy and starts the app with `npm start`.
@@ -63,6 +66,9 @@ Setup steps:
    `npm run create-admin -- you@yourcompany.com "Your Name"`. Open the link it prints to set your password.
    Do not commit that URL.
 6. Then add everyone else in **Settings > Users** and send each person their link.
+7. **Persistent file storage:** in the Railway app service, add a **Volume** mounted at `/data`, then set
+   `FILES_DIR=/data/uploads`. Railway's normal filesystem is wiped on every deploy, so uploads only survive on a volume.
+   Run the app as a single instance (a volume attaches to one service). Back the volume up from Railway's volume settings.
 
 ### Google sign-in (optional)
 

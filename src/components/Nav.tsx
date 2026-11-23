@@ -7,6 +7,7 @@ import type { SessionUser } from "@/lib/auth";
 const LINKS = [
   { href: "/", label: "Dashboard" },
   { href: "/calendar", label: "Team calendar" },
+  { href: "/health-safety", label: "Health and Safety" },
 ];
 
 export function Nav({ user }: { user: SessionUser }) {
