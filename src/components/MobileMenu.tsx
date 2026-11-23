@@ -3,10 +3,10 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 
-type NavLink = { href: string; label: string };
+import { isActivePath, type NavLink } from "../lib/nav";
 
 /**
- * Hamburger menu for small screens (hidden from the `lg` breakpoint up, where the full bar shows).
+ * Hamburger menu for small screens (hidden from the `lg` breakpoint up, where the sidebar shows).
  * The panel overlays the page under the header. It closes when you pick a link, press Escape,
  * or tap outside it. `children` is the sign-out form, rendered on the server.
  */
@@ -38,7 +38,7 @@ export function MobileMenu({ links, userLabel, children }: { links: NavLink[]; u
     };
   }, [open]);
 
-  const isActive = (href: string) => (href === "/" ? pathname === "/" : pathname === href || pathname.startsWith(`${href}/`));
+  const isActive = (href: string) => isActivePath(pathname, href);
 
   return (
     <div ref={wrapRef} className="lg:hidden">
