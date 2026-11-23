@@ -3,13 +3,14 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { db } from "@/lib/db";
 import { requireAdmin, requireUser } from "@/lib/auth";
-import { addDays, addMonths, isYmd, todayLondon } from "@/lib/dates";
-import { isStatus, MAX_DAYS_AHEAD, MAX_REQUEST_SPAN, type Status } from "@/lib/availability-shared";
+import { addDays, addMonths, fmtShort, isYmd, todayLondon } from "@/lib/dates";
+import { isStatus, MAX_DAYS_AHEAD, MAX_REQUEST_SPAN, STATUS_META, type Status } from "@/lib/availability-shared";
 
 export type SubmitState = { error?: string };
 
 const uuid = (s: string) => /^[0-9a-f-]{36}$/i.test(s);
 const REQUESTS = "/availability?tab=requests";
+const rangeLabel = (from: string, to: string) => (from === to ? fmtShort(from) : `${fmtShort(from)} to ${fmtShort(to)}`);
 
 /**
  * Submits a month of availability and LOCKS it. Every rule is re-checked here, whatever the browser did:
@@ -69,10 +70,31 @@ export async function requestChange(fd: FormData) {
   if ((Date.parse(`${to}T00:00:00Z`) - Date.parse(`${from}T00:00:00Z`)) / 86_400_000 > MAX_REQUEST_SPAN) redirect(`${REQUESTS}&error=span`);
   if (!reason) redirect(`${REQUESTS}&error=reason`);
 
-  await db().query(
-    "INSERT INTO availability_change_requests (user_id, from_day, to_day, requested_status, reason) VALUES ($1, $2, $3, $4, $5)",
-    [user.id, from, to, status, reason]
-  );
+  const client = await db().connect();
+  try {
+    await client.query("BEGIN");
+    const created = await client.query<{ id: string }>(
+      "INSERT INTO availability_change_requests (user_id, from_day, to_day, requested_status, reason) VALUES ($1, $2, $3, $4, $5) RETURNING id",
+      [user.id, from, to, status, reason]
+    );
+    // Tell every active administrator (other than the person asking) straight away.
+    await client.query(
+      `INSERT INTO notifications (user_id, message, link, ref_id)
+       SELECT id, $2, $3, $4 FROM users WHERE role = 'admin' AND active AND id <> $1`,
+      [
+        user.id,
+        `${user.name} asked to change their availability (${rangeLabel(from, to)}) to ${STATUS_META[status].label}.`,
+        "/availability?tab=requests",
+        created.rows[0].id,
+      ]
+    );
+    await client.query("COMMIT");
+  } catch (err) {
+    await client.query("ROLLBACK").catch(() => {});
+    throw err;
+  } finally {
+    client.release();
+  }
   revalidatePath("/availability");
   revalidatePath("/");
   redirect(`${REQUESTS}&done=requested`);
@@ -82,7 +104,19 @@ export async function requestChange(fd: FormData) {
 export async function cancelRequest(id: string) {
   const user = await requireUser();
   if (!uuid(id)) redirect(`${REQUESTS}&error=missing`);
-  await db().query("DELETE FROM availability_change_requests WHERE id = $1 AND user_id = $2 AND state = 'pending'", [id, user.id]);
+  const client = await db().connect();
+  try {
+    await client.query("BEGIN");
+    const removed = await client.query("DELETE FROM availability_change_requests WHERE id = $1 AND user_id = $2 AND state = 'pending' RETURNING id", [id, user.id]);
+    // The administrators' "someone asked" notifications are now out of date, so clear them.
+    if (removed.rowCount) await client.query("UPDATE notifications SET read_at = now() WHERE ref_id = $1 AND read_at IS NULL", [id]);
+    await client.query("COMMIT");
+  } catch (err) {
+    await client.query("ROLLBACK").catch(() => {});
+    throw err;
+  } finally {
+    client.release();
+  }
   revalidatePath("/availability");
   revalidatePath("/");
   redirect(`${REQUESTS}&done=cancelled`);
@@ -114,6 +148,16 @@ export async function decideRequest(id: string, fd: FormData) {
       await client.query("ROLLBACK");
       redirect(`${REQUESTS}&error=decided`);
     }
+    // Tell the person the outcome, and clear the other administrators' "someone asked" notifications.
+    if (r.user_id !== admin.id) {
+      await client.query("INSERT INTO notifications (user_id, message, link, ref_id) VALUES ($1, $2, $3, $4)", [
+        r.user_id,
+        `Your availability change request (${rangeLabel(r.from_day, r.to_day)}) was ${decision === "approve" ? "approved. Your calendar has been updated" : "declined. Your calendar is unchanged"}.${note ? ` Note from ${admin.name}: ${note}` : ""}`,
+        "/availability?tab=requests",
+        id,
+      ]);
+    }
+    await client.query("UPDATE notifications SET read_at = now() WHERE ref_id = $1 AND user_id <> $2 AND read_at IS NULL AND user_id IN (SELECT id FROM users WHERE role = 'admin')", [id, r.user_id]);
     if (decision === "approve") {
       await client.query(
         `INSERT INTO availability_days (user_id, day, status, source)

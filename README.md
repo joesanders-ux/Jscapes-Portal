@@ -30,8 +30,9 @@ Built:
   (week and month calendar), Submit availability (pick a month, mark days, submit; submitting LOCKS the days, and days left as Not provided are
   locked as Not provided), Change requests (staff ask for a change to locked days and give a reason; admins approve or decline, and approving
   updates the days) and, for admins, Team availability (week/month grid of everyone, with a count of who is available each day and who has not
-  entered next month). Reminders are in-app: a Dashboard banner until next month is fully entered (marked overdue after the 15th), and a banner
-  on the admin Dashboard while requests are waiting. Text-message notifications are not built yet. ServiceM8 interaction is not built (still to be confirmed)
+  entered next month). Reminders are in-app: a Dashboard banner until next month is fully entered (marked overdue after the 15th). Change requests
+  send an in-app notification to every administrator when made, and to the person when decided (with the admin's note); a withdrawn or decided
+  request clears the administrators' notification. The admin Dashboard also shows a banner while requests are waiting. Text-message notifications are not built yet. ServiceM8 interaction is not built (still to be confirmed)
 - **Shifts** (visible to everyone): admins plan a week at a time in the Planner (start and end time per person and day, with each person's
   availability shown beside it). Saving keeps shifts HIDDEN; "Save and publish this week" shows them to staff and sends each person an in-app
   notification. Changing a published shift hides it again until it is published. Staff see only their own published shifts, in week or month
