@@ -7,17 +7,18 @@ export const dynamic = "force-dynamic";
 // Streams one stored PDF to a signed-in user. Files are never served from a public folder,
 // so a link only works for people who are signed in.
 export async function GET(_req: Request, { params }: { params: { id: string } }) {
-  await requireUser();
+  const user = await requireUser();
   if (!/^[0-9a-f-]{36}$/i.test(params.id)) return new Response("Not found", { status: 404 });
 
   const { rows } = await db().query(
-    `SELECT v.storage_key, v.version_number, d.title
+    `SELECT v.storage_key, v.version_number, d.title, d.archived_at
        FROM health_safety_versions v JOIN health_safety_documents d ON d.id = v.document_id
       WHERE v.id = $1`,
     [params.id]
   );
   const row = rows[0];
-  if (!row) return new Response("Not found", { status: 404 });
+  // Archived documents are admin-only, even for someone who kept an old link.
+  if (!row || (row.archived_at && user.role !== "admin")) return new Response("Not found", { status: 404 });
 
   let data: Buffer;
   try {

@@ -15,7 +15,8 @@ Built:
   change role, deactivate/reactivate (deactivating signs them out immediately)
 - Dashboard with team bulletin; Team calendar (week/month, four event types)
 - **Health and Safety** (visible to everyone): admins upload PDFs and new versions; staff open them. One version is marked
-  current, previous versions are kept. Files are served only to signed-in users
+  current, previous versions are kept. Admins can archive a document (hidden from staff, nothing deleted) and restore it.
+  Files are served only to signed-in users
 - PostgreSQL migrations and a demo-data seed
 
 Not built yet: Van Compliance, Equipment Maintenance, Timesheets, staff acknowledgement/signing of Health and Safety documents, Policies, Availability, Shifts,
