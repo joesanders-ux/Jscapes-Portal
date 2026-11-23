@@ -12,6 +12,7 @@ const LINKS = [
   { href: "/health-safety", label: "Health and Safety" },
   { href: "/vans", label: "Van Compliance" },
   { href: "/equipment", label: "Equipment Maintenance" },
+  { href: "/availability", label: "Availability" },
 ];
 
 /**

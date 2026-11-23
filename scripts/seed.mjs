@@ -110,6 +110,38 @@ try {
     }
     console.log("Demo equipment and checks inserted.");
   }
+
+  // Demo availability: two staff members have submitted this month and next; Alex has not entered next month.
+  const availCount = (await client.query("SELECT count(*)::int AS n FROM availability_days")).rows[0].n;
+  const staffList = (await client.query("SELECT id, email FROM users WHERE role = 'staff' ORDER BY email")).rows;
+  if (availCount === 0 && staffList.length > 0) {
+    const first = new Date(Date.UTC(today.getUTCFullYear(), today.getUTCMonth(), 1));
+    const todayYmd = ymd(new Date(Date.UTC(today.getUTCFullYear(), today.getUTCMonth(), today.getUTCDate())));
+    const monthDays = (offset) => {
+      const start = new Date(Date.UTC(first.getUTCFullYear(), first.getUTCMonth() + offset, 1));
+      const out = [];
+      for (let d = start; d.getUTCMonth() === start.getUTCMonth(); d = new Date(d.getTime() + 86400000)) out.push(ymd(d));
+      return out;
+    };
+    const fill = async (userId, days, rule) => {
+      for (const day of days) {
+        if (day < todayYmd) continue;
+        const dow = new Date(`${day}T00:00:00Z`).getUTCDay(); // 0 = Sunday
+        await client.query("INSERT INTO availability_days (user_id, day, status) VALUES ($1,$2,$3) ON CONFLICT DO NOTHING", [userId, day, rule(dow)]);
+      }
+    };
+    const weekdays = (dow) => (dow === 0 || dow === 6 ? "not_available" : "available");
+    // First staff member: weekdays available, every Friday of this and next month not available.
+    await fill(staffList[0].id, [...monthDays(0), ...monthDays(1)], (dow) => (dow === 5 ? "not_available" : weekdays(dow)));
+    // Second staff member: this month only, so the "enter next month" reminder shows for them.
+    if (staffList[1]) await fill(staffList[1].id, monthDays(0), weekdays);
+    // One pending change request for the admin to review.
+    await client.query(
+      "INSERT INTO availability_change_requests (user_id, from_day, to_day, requested_status, reason) VALUES ($1, $2, $2, 'not_available', $3)",
+      [staffList[0].id, ymd(new Date(Date.UTC(today.getUTCFullYear(), today.getUTCMonth(), today.getUTCDate() + 3))), "Dentist appointment (demo)."]
+    );
+    console.log("Demo availability inserted.");
+  }
 } finally {
   await client.end();
 }

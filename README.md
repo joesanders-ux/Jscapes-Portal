@@ -26,9 +26,15 @@ Built:
   (filter by item, category, month, needs-attention) and Equipment list (name, model/serial, spare parts, manual PDF, notes).
   Admins add, edit, deactivate and reactivate equipment and upload or replace manuals; staff can read the list and open manuals.
   The monthly reminder is a Dashboard banner plus a list on the check tab. Manuals need `FILES_DIR` (see Railway setup)
+- **Availability** (visible to everyone): Available / Not provided / Not available per day, up to a year ahead. Four tabs: My availability
+  (week and month calendar), Submit availability (pick a month, mark days, submit; submitting LOCKS the days, and days left as Not provided are
+  locked as Not provided), Change requests (staff ask for a change to locked days and give a reason; admins approve or decline, and approving
+  updates the days) and, for admins, Team availability (week/month grid of everyone, with a count of who is available each day and who has not
+  entered next month). Reminders are in-app: a Dashboard banner until next month is fully entered (marked overdue after the 15th), and a banner
+  on the admin Dashboard while requests are waiting. Text-message notifications are not built yet. ServiceM8 interaction is not built (still to be confirmed)
 - PostgreSQL migrations and a demo-data seed
 
-Not built yet: Timesheets, staff acknowledgement/signing of Health and Safety documents, Policies, Availability, Shifts,
+Not built yet: Timesheets, Shifts, staff acknowledgement/signing of Health and Safety documents, Policies,
 Job Images, section on/off switches, SMS and in-app notifications, ServiceM8 dashboard tiles, PAE Weed Spraying Logbook and calculators.
 
 ## Local development
@@ -90,5 +96,5 @@ using that same email address.
 ## Next sections (planned)
 
 Timesheets (admin-only, PDF export). After the remaining decisions
-(ServiceM8, SMS provider): Health and Safety, Policies, Availability, Shifts, Job Images (viewable by everyone, staff upload
+(ServiceM8, SMS provider): Health and Safety, Policies, Job Images (viewable by everyone, staff upload
 their own), notifications, section switches.

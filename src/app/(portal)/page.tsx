@@ -3,6 +3,7 @@ import { db } from "@/lib/db";
 import { requireUser } from "@/lib/auth";
 import { monthlyVanStatus } from "@/lib/vans";
 import { monthlyEquipmentStatus } from "@/lib/equipment";
+import { availabilityReminder, pendingChangeRequestCount } from "@/lib/availability";
 import { createPost, deletePost, togglePin } from "@/app/actions";
 
 type Post = { id: string; title: string; body: string; pinned: boolean; created_at: Date; author: string | null };
@@ -15,11 +16,35 @@ export default async function DashboardPage() {
       ORDER BY b.pinned DESC, b.created_at DESC LIMIT 20`
   );
   const isAdmin = user.role === "admin";
-  const [vanStatus, equipmentStatus] = await Promise.all([monthlyVanStatus(), monthlyEquipmentStatus()]);
+  const [vanStatus, equipmentStatus, reminder, pendingRequests] = await Promise.all([
+    monthlyVanStatus(),
+    monthlyEquipmentStatus(),
+    availabilityReminder(user.id),
+    isAdmin ? pendingChangeRequestCount() : Promise.resolve(0),
+  ]);
 
   return (
     <div className="flex flex-col gap-8">
       <h1 className="text-2xl font-semibold">Dashboard</h1>
+
+      {/* Availability reminder for the following month (overdue once the 15th has passed). */}
+      {reminder && (
+        <section aria-labelledby="avail-due" className="rounded-lg border border-warn bg-white p-4">
+          <h2 id="avail-due" className="font-semibold text-warn">
+            {reminder.overdue ? `Availability for ${reminder.monthLabel} is overdue` : `Enter your availability for ${reminder.monthLabel}`}
+          </h2>
+          <p className="mt-1 text-sm">{reminder.submittedDays} of {reminder.totalDays} days submitted.</p>
+          <Link href={`/availability?tab=submit&month=${reminder.monthStart.slice(0, 7)}`} className="mt-2 inline-block text-sm text-brand-text underline">Enter availability</Link>
+        </section>
+      )}
+
+      {/* Admins: availability change requests waiting for a decision. */}
+      {isAdmin && pendingRequests > 0 && (
+        <section aria-labelledby="avail-requests" className="rounded-lg border border-warn bg-white p-4">
+          <h2 id="avail-requests" className="font-semibold text-warn">{pendingRequests} availability change {pendingRequests === 1 ? "request is" : "requests are"} waiting</h2>
+          <Link href="/availability?tab=requests" className="mt-2 inline-block text-sm text-brand-text underline">Review requests</Link>
+        </section>
+      )}
 
       {/* Monthly van-check reminder: shown to everyone until every active van has a check this month. */}
       {vanStatus.due.length > 0 && (
