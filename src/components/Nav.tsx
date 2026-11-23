@@ -23,7 +23,8 @@ const LINKS = [
  * The light-green focus ring keeps keyboard focus visible on the dark background.
  */
 export function Nav({ user }: { user: SessionUser }) {
-  const links = user.role === "admin" ? [...LINKS, { href: "/settings/users", label: "Settings" }] : LINKS;
+  // Timesheets and Settings are for administrators only.
+  const links = user.role === "admin" ? [...LINKS, { href: "/timesheets", label: "Timesheets" }, { href: "/settings/users", label: "Settings" }] : LINKS;
   const userLabel = `${user.name} (${user.role === "admin" ? "Admin" : "Staff"})`;
 
   return (

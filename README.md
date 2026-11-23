@@ -39,10 +39,14 @@ Built:
   view, with times labelled approximate. Admins also get an All shifts tab (hidden shifts clearly marked). The Dashboard shows notifications
   (with Mark as read) and, for admins, how many shifts are still hidden. One shift per person per day; shifts cannot run past midnight.
   Text-message notifications are not built yet
+- **Timesheets** (administrators only; staff get "not found", on the page and the PDF link): hours per person per day, entered as numbers
+  (0 to 24, quarter hours fine). Week, month and custom date-range views with Previous / Next / This week controls. The grid shows row and
+  day totals; ranges over 42 days show totals only. "Export this period to PDF" downloads a payroll PDF (totals by person, then daily hours)
+  for any period up to 366 days. Uses the `pdf-lib` package
 - PostgreSQL migrations and a demo-data seed
 
-Not built yet: Timesheets, staff acknowledgement/signing of Health and Safety documents, Policies,
-Job Images, section on/off switches, SMS and in-app notifications, ServiceM8 dashboard tiles, PAE Weed Spraying Logbook and calculators.
+Not built yet: staff acknowledgement/signing of Health and Safety documents, Policies,
+Job Images, section on/off switches, SMS notifications, ServiceM8 dashboard tiles, PAE Weed Spraying Logbook and calculators.
 
 ## Local development
 
@@ -102,6 +106,6 @@ using that same email address.
 
 ## Next sections (planned)
 
-Timesheets (admin-only, PDF export). After the remaining decisions
+Policies, Job Images and the Settings section switches. After the remaining decisions
 (ServiceM8, SMS provider): Health and Safety, Policies, Job Images (viewable by everyone, staff upload
 their own), notifications, section switches.

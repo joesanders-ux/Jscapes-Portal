@@ -166,6 +166,22 @@ try {
     }
     console.log("Demo shifts inserted (this week published, next week hidden).");
   }
+
+  // Demo timesheet hours: the last three weeks, Monday to Friday, for staff only (fictional figures).
+  const tsCount = (await client.query("SELECT count(*)::int AS n FROM timesheet_entries")).rows[0].n;
+  const tsPeople = (await client.query("SELECT id FROM users WHERE role = 'staff' AND active ORDER BY created_at")).rows;
+  if (tsCount === 0 && tsPeople.length > 0) {
+    const dow = (today.getUTCDay() + 6) % 7;
+    for (let pi = 0; pi < tsPeople.length; pi++) {
+      for (let offset = -21; offset <= 7; offset++) {
+        const d = new Date(Date.UTC(today.getUTCFullYear(), today.getUTCMonth(), today.getUTCDate() - dow + offset));
+        if ((d.getUTCDay() + 6) % 7 > 4 || ymd(d) > ymd(today)) continue; // weekdays up to today
+        const hours = [8, 7.5, 8, 7.75, 8][(offset + 21 + pi) % 5];
+        await client.query("INSERT INTO timesheet_entries (user_id, day, hours) VALUES ($1,$2,$3)", [tsPeople[pi].id, ymd(d), hours]);
+      }
+    }
+    console.log("Demo timesheet hours inserted.");
+  }
 } finally {
   await client.end();
 }
