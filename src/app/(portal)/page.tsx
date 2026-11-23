@@ -18,6 +18,8 @@ export default async function DashboardPage() {
       ORDER BY b.pinned DESC, b.created_at DESC LIMIT 20`
   );
   const isAdmin = user.role === "admin";
+  // The first word of their name, so "Sam Staff" is greeted as "Sam". Falls back to the whole name.
+  const firstName = user.name.trim().split(/\s+/)[0] || user.name;
   const [vanStatus, equipmentStatus, reminder, pendingRequests, notifications, hiddenShifts] = await Promise.all([
     monthlyVanStatus(),
     monthlyEquipmentStatus(),
@@ -29,7 +31,10 @@ export default async function DashboardPage() {
 
   return (
     <div className="flex flex-col gap-8">
-      <h1 className="text-2xl font-semibold">Dashboard</h1>
+      <div>
+        <p className="text-sm font-semibold text-ink-muted">DASHBOARD</p>
+        <h1 className="text-2xl font-semibold">Hello {firstName}</h1>
+      </div>
 
       {/* In-app notifications (for example, new shifts published). Read ones disappear. */}
       {notifications.length > 0 && (
