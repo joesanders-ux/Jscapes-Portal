@@ -21,6 +21,12 @@ Built:
   previous versions kept). Each document is a Policy or a Handbook. Staff read it inside the portal in the browser's built-in PDF viewer
   (page `/policies/<id>`), with "Open full screen" and "Download PDF" links as a fallback because some phones only show the first page
   in an embedded viewer. Files are served only to signed-in users; staff get nothing for archived documents
+- **Job Images** (visible to everyone): anyone signed in can upload JPEG/PNG/WebP photos (up to 10 at a time, 10 MB each) with a job
+  date, optional job reference, description and operator notes. Images are grouped by week (Monday to Sunday) with Previous / This week /
+  Next, a jump-to-date control and an all-weeks search. Two layouts: Folders (one folder per job reference) and List (table). Each image
+  has a page with edit and delete (only the person who added it, or an admin); downloads are per image or as a ZIP of a week or a job
+  folder. Thumbnails are made at upload with the `sharp` package so browsing stays light. Files are served only to signed-in users.
+  **Not built: any ServiceM8 import.** Its sync decisions are still to be confirmed, so nothing talks to ServiceM8 and no API key is used yet
 - **Van Compliance** (visible to everyone): staff submit a van check (oil, tyres, lights, dashboard warnings, cleanliness, overall
   condition Poor/Moderate/Compliant, notes; any "No" needs an explanation). Admins get a Records tab (filter by van, month, needs-attention)
   and a Vehicles tab (add, deactivate or reactivate vans). The monthly reminder is in-app: a banner on the Dashboard and on the
@@ -50,7 +56,7 @@ Built:
 - PostgreSQL migrations and a demo-data seed
 
 Not built yet: staff acknowledgement/signing of Health and Safety documents and policies,
-Job Images, section on/off switches, SMS notifications, ServiceM8 dashboard tiles, PAE Weed Spraying Logbook and calculators.
+ServiceM8 import for Job Images, section on/off switches, SMS notifications, ServiceM8 dashboard tiles, PAE Weed Spraying Logbook and calculators.
 
 ## Local development
 
@@ -110,5 +116,5 @@ using that same email address.
 
 ## Next sections (planned)
 
-Job Images (viewable by everyone, staff upload their own) and the Settings section switches. These wait on the remaining
-decisions (ServiceM8, SMS provider).
+The ServiceM8 import for Job Images and SMS notifications wait on decisions (ServiceM8, SMS provider). The Settings section
+switches have no blocker.
