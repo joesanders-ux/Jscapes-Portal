@@ -2,6 +2,7 @@ import Link from "next/link";
 import { db } from "@/lib/db";
 import { requireUser } from "@/lib/auth";
 import { monthlyVanStatus } from "@/lib/vans";
+import { monthlyEquipmentStatus } from "@/lib/equipment";
 import { createPost, deletePost, togglePin } from "@/app/actions";
 
 type Post = { id: string; title: string; body: string; pinned: boolean; created_at: Date; author: string | null };
@@ -14,7 +15,7 @@ export default async function DashboardPage() {
       ORDER BY b.pinned DESC, b.created_at DESC LIMIT 20`
   );
   const isAdmin = user.role === "admin";
-  const vanStatus = await monthlyVanStatus();
+  const [vanStatus, equipmentStatus] = await Promise.all([monthlyVanStatus(), monthlyEquipmentStatus()]);
 
   return (
     <div className="flex flex-col gap-8">
@@ -26,6 +27,15 @@ export default async function DashboardPage() {
           <h2 id="van-due" className="font-semibold text-warn">Monthly van checks due for {vanStatus.monthLabel}</h2>
           <p className="mt-1 text-sm">{vanStatus.due.map((v) => v.registration).join(", ")} still {vanStatus.due.length === 1 ? "needs" : "need"} a check this month.</p>
           <Link href="/vans" className="mt-2 inline-block text-sm text-brand-text underline">Go to Van Compliance</Link>
+        </section>
+      )}
+
+      {/* Monthly equipment-check reminder: a count, as there can be many items. */}
+      {equipmentStatus.due.length > 0 && (
+        <section aria-labelledby="equipment-due" className="rounded-lg border border-warn bg-white p-4">
+          <h2 id="equipment-due" className="font-semibold text-warn">Monthly equipment checks due for {equipmentStatus.monthLabel}</h2>
+          <p className="mt-1 text-sm">{equipmentStatus.due.length} of {equipmentStatus.items.length} {equipmentStatus.items.length === 1 ? "item has" : "items have"} not had a check this month.</p>
+          <Link href="/equipment" className="mt-2 inline-block text-sm text-brand-text underline">Go to Equipment Maintenance</Link>
         </section>
       )}
 

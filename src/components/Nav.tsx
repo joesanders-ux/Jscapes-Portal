@@ -11,6 +11,7 @@ const LINKS = [
   { href: "/calendar", label: "Team calendar" },
   { href: "/health-safety", label: "Health and Safety" },
   { href: "/vans", label: "Van Compliance" },
+  { href: "/equipment", label: "Equipment Maintenance" },
 ];
 
 /**

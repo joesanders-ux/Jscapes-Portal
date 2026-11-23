@@ -21,9 +21,14 @@ Built:
   condition Poor/Moderate/Compliant, notes; any "No" needs an explanation). Admins get a Records tab (filter by van, month, needs-attention)
   and a Vehicles tab (add, deactivate or reactivate vans). The monthly reminder is in-app: a banner on the Dashboard and on the
   Van Compliance page lists any active van with no check this calendar month (UK time). Text-message reminders are not built yet
+- **Equipment Maintenance** (visible to everyone): staff submit a monthly check for an item of equipment; the checklist follows its
+  category (Hand tools, Lawn mowers, Petrol equipment) and any "No" needs an explanation. Three tabs: Submit a check, History
+  (filter by item, category, month, needs-attention) and Equipment list (name, model/serial, spare parts, manual PDF, notes).
+  Admins add, edit, deactivate and reactivate equipment and upload or replace manuals; staff can read the list and open manuals.
+  The monthly reminder is a Dashboard banner plus a list on the check tab. Manuals need `FILES_DIR` (see Railway setup)
 - PostgreSQL migrations and a demo-data seed
 
-Not built yet: Equipment Maintenance, Timesheets, staff acknowledgement/signing of Health and Safety documents, Policies, Availability, Shifts,
+Not built yet: Timesheets, staff acknowledgement/signing of Health and Safety documents, Policies, Availability, Shifts,
 Job Images, section on/off switches, SMS and in-app notifications, ServiceM8 dashboard tiles, PAE Weed Spraying Logbook and calculators.
 
 ## Local development
@@ -84,6 +89,6 @@ using that same email address.
 
 ## Next sections (planned)
 
-Van Compliance, Equipment Maintenance, then Timesheets (admin-only, PDF export). After the remaining decisions
+Timesheets (admin-only, PDF export). After the remaining decisions
 (ServiceM8, SMS provider): Health and Safety, Policies, Availability, Shifts, Job Images (viewable by everyone, staff upload
 their own), notifications, section switches.

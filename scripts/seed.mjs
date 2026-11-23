@@ -84,6 +84,32 @@ try {
     }
     console.log("Demo vans and checks inserted.");
   }
+
+  // Demo equipment and checks (fictional items). Seeded separately so an existing demo database gets them too.
+  const equipmentCount = (await client.query("SELECT count(*)::int AS n FROM equipment")).rows[0].n;
+  if (equipmentCount === 0 && checker) {
+    const items = {};
+    for (const [name, category, serial, parts] of [
+      ["Demo hedge shears", "hand_tools", "DEMO-HS-01", "Spare blade set, pivot bolt"],
+      ["Demo rotary mower", "lawn_mower", "DM-5000 / SN DEMO001", "Blade, air filter, spark plug"],
+      ["Demo cylinder mower", "lawn_mower", "DC-300 / SN DEMO002", "Cutting cylinder, grass bag"],
+      ["Demo chainsaw", "petrol", "DS-450 / SN DEMO003", "Chain, bar, spark plug, air filter"],
+    ]) {
+      items[name] = (await client.query("INSERT INTO equipment (name, category, model_serial, spare_parts) VALUES ($1,$2,$3,$4) RETURNING id", [name, category, serial, parts])).rows[0].id;
+    }
+    // [item, days ago, [[key, result, note]], notes]
+    const eqChecks = [
+      ["Demo rotary mower", 0, [["deck", "yes", ""], ["air_filter", "yes", ""], ["oil", "yes", ""], ["fuel", "yes", ""], ["pull_cord", "yes", ""]], ""],
+      ["Demo chainsaw", 40, [["grease", "yes", ""], ["sharpening", "no", "Chain is blunt (demo)."], ["defects", "yes", ""], ["cleaning", "yes", ""], ["fuel_mix", "yes", ""], ["oil_attachments", "yes", ""]], "Sharpen before next use (demo)."],
+    ];
+    for (const [name, daysAgo, answers, notes] of eqChecks) {
+      const chk = await client.query("INSERT INTO equipment_checks (equipment_id, checked_by, checked_at, notes) VALUES ($1,$2, now() - make_interval(days => $3::int), $4) RETURNING id", [items[name], checker.id, daysAgo, notes]);
+      for (const [key, result, note] of answers) {
+        await client.query("INSERT INTO equipment_check_items (check_id, item_key, result, note) VALUES ($1,$2,$3,$4)", [chk.rows[0].id, key, result, note]);
+      }
+    }
+    console.log("Demo equipment and checks inserted.");
+  }
 } finally {
   await client.end();
 }
