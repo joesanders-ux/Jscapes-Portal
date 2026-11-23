@@ -1,5 +1,7 @@
+import Link from "next/link";
 import { db } from "@/lib/db";
 import { requireUser } from "@/lib/auth";
+import { monthlyVanStatus } from "@/lib/vans";
 import { createPost, deletePost, togglePin } from "@/app/actions";
 
 type Post = { id: string; title: string; body: string; pinned: boolean; created_at: Date; author: string | null };
@@ -12,10 +14,20 @@ export default async function DashboardPage() {
       ORDER BY b.pinned DESC, b.created_at DESC LIMIT 20`
   );
   const isAdmin = user.role === "admin";
+  const vanStatus = await monthlyVanStatus();
 
   return (
     <div className="flex flex-col gap-8">
       <h1 className="text-2xl font-semibold">Dashboard</h1>
+
+      {/* Monthly van-check reminder: shown to everyone until every active van has a check this month. */}
+      {vanStatus.due.length > 0 && (
+        <section aria-labelledby="van-due" className="rounded-lg border border-warn bg-white p-4">
+          <h2 id="van-due" className="font-semibold text-warn">Monthly van checks due for {vanStatus.monthLabel}</h2>
+          <p className="mt-1 text-sm">{vanStatus.due.map((v) => v.registration).join(", ")} still {vanStatus.due.length === 1 ? "needs" : "need"} a check this month.</p>
+          <Link href="/vans" className="mt-2 inline-block text-sm text-brand-text underline">Go to Van Compliance</Link>
+        </section>
+      )}
 
       <section aria-labelledby="metrics" className="grid gap-4 sm:grid-cols-2">
         <h2 id="metrics" className="sr-only">This week</h2>

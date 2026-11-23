@@ -26,6 +26,7 @@
   --ink-muted: #5a6266;
   --line: #d8dddf;
   --danger: #a32121;
+  --warn: #8a4a00;           /* amber-brown for "needs attention"; passes contrast on white */
 
   /* Event type colours: functional, not brand. Labels and symbols always accompany them. */
   --ev-management: #7a3fa0;

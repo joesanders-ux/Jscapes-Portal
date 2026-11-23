@@ -13,6 +13,7 @@ const config: Config = {
         ink: { DEFAULT: "var(--ink)", muted: "var(--ink-muted)" },
         line: "var(--line)",
         danger: "var(--danger)",
+        warn: "var(--warn)",
         ev: {
           management: "var(--ev-management)",
           social: "var(--ev-social)",

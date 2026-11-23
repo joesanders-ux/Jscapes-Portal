@@ -58,6 +58,32 @@ try {
     console.log("Demo data inserted. Invite links (demo users, each works once):");
     for (const [email] of users) console.log(`  ${email}: ${await createInvite(client, ids[email])}`);
   }
+
+  // Demo vans and checks (fictional registrations). Seeded separately so an existing demo database gets them too.
+  const vanCount = (await client.query("SELECT count(*)::int AS n FROM vans")).rows[0].n;
+  const people = (await client.query("SELECT id, role FROM users ORDER BY created_at")).rows;
+  const checker = people.find((p) => p.role === "staff") ?? people[0];
+  if (vanCount === 0 && checker) {
+    const vans = {};
+    for (const [reg, desc] of [["AB21 DEM", "Demo Transit"], ["CD22 DEM", "Demo Berlingo"], ["EF23 DEM", "Demo Caddy"]]) {
+      vans[reg] = (await client.query("INSERT INTO vans (registration, description) VALUES ($1,$2) RETURNING id", [reg, desc])).rows[0].id;
+    }
+    // [van, days ago, oil, tyres, lights, dashboard, clean (true = OK), notes per item, condition, notes]
+    const checks = [
+      ["AB21 DEM", 0, [true, true, true, true, true], {}, "compliant", ""],
+      ["CD22 DEM", 40, [true, false, true, true, false], { tyres: "Rear nearside tyre looks worn (demo).", clean: "Load area needs cleaning (demo)." }, "moderate", "Book a tyre check this week (demo)."],
+    ];
+    for (const [reg, daysAgo, ok, notes, condition, extra] of checks) {
+      const keys = ["oil", "tyres", "lights", "dashboard", "clean"];
+      await client.query(
+        `INSERT INTO van_checks (van_id, checked_by, checked_at, oil_ok, oil_note, tyres_ok, tyres_note, lights_ok, lights_note,
+                                 dashboard_ok, dashboard_note, clean_ok, clean_note, condition, notes)
+         VALUES ($1,$2, now() - make_interval(days => $3::int), $4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15)`,
+        [vans[reg], checker.id, daysAgo, ...keys.flatMap((k, i) => [ok[i], notes[k] ?? ""]), condition, extra]
+      );
+    }
+    console.log("Demo vans and checks inserted.");
+  }
 } finally {
   await client.end();
 }

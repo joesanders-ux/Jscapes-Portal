@@ -17,9 +17,13 @@ Built:
 - **Health and Safety** (visible to everyone): admins upload PDFs and new versions; staff open them. One version is marked
   current, previous versions are kept. Admins can archive a document (hidden from staff, nothing deleted) and restore it.
   Files are served only to signed-in users
+- **Van Compliance** (visible to everyone): staff submit a van check (oil, tyres, lights, dashboard warnings, cleanliness, overall
+  condition Poor/Moderate/Compliant, notes; any "No" needs an explanation). Admins get a Records tab (filter by van, month, needs-attention)
+  and a Vehicles tab (add, deactivate or reactivate vans). The monthly reminder is in-app: a banner on the Dashboard and on the
+  Van Compliance page lists any active van with no check this calendar month (UK time). Text-message reminders are not built yet
 - PostgreSQL migrations and a demo-data seed
 
-Not built yet: Van Compliance, Equipment Maintenance, Timesheets, staff acknowledgement/signing of Health and Safety documents, Policies, Availability, Shifts,
+Not built yet: Equipment Maintenance, Timesheets, staff acknowledgement/signing of Health and Safety documents, Policies, Availability, Shifts,
 Job Images, section on/off switches, SMS and in-app notifications, ServiceM8 dashboard tiles, PAE Weed Spraying Logbook and calculators.
 
 ## Local development
