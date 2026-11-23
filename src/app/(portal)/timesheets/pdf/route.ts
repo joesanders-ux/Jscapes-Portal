@@ -24,7 +24,8 @@ export async function GET(req: Request) {
     sheet, from, to, generatedBy: user.name, generatedAt,
     title: from === to ? fmtShort(from) : `${from} to ${to}`,
   });
-  return new Response(bytes, {
+  // A copy typed as a plain ArrayBuffer-backed Uint8Array, which is what Response accepts as a body.
+  return new Response(new Uint8Array(bytes), {
     headers: {
       "Content-Type": "application/pdf",
       "Content-Disposition": `attachment; filename="timesheets-${from}-to-${to}.pdf"`,
