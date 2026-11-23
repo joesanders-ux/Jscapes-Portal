@@ -14,6 +14,7 @@ const LINKS = [
   { href: "/equipment", label: "Equipment Maintenance" },
   { href: "/availability", label: "Availability" },
   { href: "/shifts", label: "Shifts" },
+  { href: "/policies", label: "Policies and Handbooks" },
 ];
 
 /**

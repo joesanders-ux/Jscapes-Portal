@@ -17,6 +17,10 @@ Built:
 - **Health and Safety** (visible to everyone): admins upload PDFs and new versions; staff open them. One version is marked
   current, previous versions are kept. Admins can archive a document (hidden from staff, nothing deleted) and restore it.
   Files are served only to signed-in users
+- **Policies and Handbooks** (visible to everyone): same model as Health and Safety (admin-only upload, new versions, archive/restore;
+  previous versions kept). Each document is a Policy or a Handbook. Staff read it inside the portal in the browser's built-in PDF viewer
+  (page `/policies/<id>`), with "Open full screen" and "Download PDF" links as a fallback because some phones only show the first page
+  in an embedded viewer. Files are served only to signed-in users; staff get nothing for archived documents
 - **Van Compliance** (visible to everyone): staff submit a van check (oil, tyres, lights, dashboard warnings, cleanliness, overall
   condition Poor/Moderate/Compliant, notes; any "No" needs an explanation). Admins get a Records tab (filter by van, month, needs-attention)
   and a Vehicles tab (add, deactivate or reactivate vans). The monthly reminder is in-app: a banner on the Dashboard and on the
@@ -45,7 +49,7 @@ Built:
   for any period up to 366 days. Uses the `pdf-lib` package
 - PostgreSQL migrations and a demo-data seed
 
-Not built yet: staff acknowledgement/signing of Health and Safety documents, Policies,
+Not built yet: staff acknowledgement/signing of Health and Safety documents and policies,
 Job Images, section on/off switches, SMS notifications, ServiceM8 dashboard tiles, PAE Weed Spraying Logbook and calculators.
 
 ## Local development
@@ -106,6 +110,5 @@ using that same email address.
 
 ## Next sections (planned)
 
-Policies, Job Images and the Settings section switches. After the remaining decisions
-(ServiceM8, SMS provider): Health and Safety, Policies, Job Images (viewable by everyone, staff upload
-their own), notifications, section switches.
+Job Images (viewable by everyone, staff upload their own) and the Settings section switches. These wait on the remaining
+decisions (ServiceM8, SMS provider).
