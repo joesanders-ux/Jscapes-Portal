@@ -13,6 +13,7 @@ const LINKS = [
   { href: "/vans", label: "Van Compliance" },
   { href: "/equipment", label: "Equipment Maintenance" },
   { href: "/availability", label: "Availability" },
+  { href: "/shifts", label: "Shifts" },
 ];
 
 /**

@@ -142,6 +142,30 @@ try {
     );
     console.log("Demo availability inserted.");
   }
+
+  // Demo shifts for the current week and next: this week is published, next week is saved but still hidden.
+  const shiftCount = (await client.query("SELECT count(*)::int AS n FROM shifts")).rows[0].n;
+  const shiftPeople = (await client.query("SELECT id, role FROM users WHERE active ORDER BY created_at")).rows;
+  if (shiftCount === 0 && shiftPeople.length > 0) {
+    const adminRow = shiftPeople.find((p) => p.role === "admin") ?? shiftPeople[0];
+    const dow = (today.getUTCDay() + 6) % 7; // Monday = 0
+    for (let i = 0; i < shiftPeople.length; i++) {
+      const person = shiftPeople[i];
+      if (person.role === "admin") continue;
+      for (let offset = 0; offset < 10; offset++) {
+        const d = new Date(Date.UTC(today.getUTCFullYear(), today.getUTCMonth(), today.getUTCDate() - dow + offset));
+        const weekday = (d.getUTCDay() + 6) % 7;
+        if (weekday > 4) continue; // Monday to Friday only
+        const thisWeek = offset < 7;
+        await client.query(
+          "INSERT INTO shifts (user_id, day, start_time, end_time, published_at, created_by) VALUES ($1,$2,$3,$4,$5,$6)",
+          [person.id, ymd(d), i % 2 === 0 ? "08:00" : "09:00", i % 2 === 0 ? "16:00" : "17:00", thisWeek ? new Date() : null, adminRow.id]
+        );
+      }
+      await client.query("INSERT INTO notifications (user_id, message, link) VALUES ($1,$2,$3)", [person.id, "New shifts published for this week (5 shifts). Times are approximate. (demo)", "/shifts"]);
+    }
+    console.log("Demo shifts inserted (this week published, next week hidden).");
+  }
 } finally {
   await client.end();
 }

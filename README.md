@@ -32,9 +32,15 @@ Built:
   updates the days) and, for admins, Team availability (week/month grid of everyone, with a count of who is available each day and who has not
   entered next month). Reminders are in-app: a Dashboard banner until next month is fully entered (marked overdue after the 15th), and a banner
   on the admin Dashboard while requests are waiting. Text-message notifications are not built yet. ServiceM8 interaction is not built (still to be confirmed)
+- **Shifts** (visible to everyone): admins plan a week at a time in the Planner (start and end time per person and day, with each person's
+  availability shown beside it). Saving keeps shifts HIDDEN; "Save and publish this week" shows them to staff and sends each person an in-app
+  notification. Changing a published shift hides it again until it is published. Staff see only their own published shifts, in week or month
+  view, with times labelled approximate. Admins also get an All shifts tab (hidden shifts clearly marked). The Dashboard shows notifications
+  (with Mark as read) and, for admins, how many shifts are still hidden. One shift per person per day; shifts cannot run past midnight.
+  Text-message notifications are not built yet
 - PostgreSQL migrations and a demo-data seed
 
-Not built yet: Timesheets, Shifts, staff acknowledgement/signing of Health and Safety documents, Policies,
+Not built yet: Timesheets, staff acknowledgement/signing of Health and Safety documents, Policies,
 Job Images, section on/off switches, SMS and in-app notifications, ServiceM8 dashboard tiles, PAE Weed Spraying Logbook and calculators.
 
 ## Local development

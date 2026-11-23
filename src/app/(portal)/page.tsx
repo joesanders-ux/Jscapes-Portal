@@ -4,6 +4,8 @@ import { requireUser } from "@/lib/auth";
 import { monthlyVanStatus } from "@/lib/vans";
 import { monthlyEquipmentStatus } from "@/lib/equipment";
 import { availabilityReminder, pendingChangeRequestCount } from "@/lib/availability";
+import { hiddenShiftSummary, unreadNotifications } from "@/lib/shifts";
+import { markAllNotificationsRead, markNotificationRead } from "@/app/(portal)/notifications/actions";
 import { createPost, deletePost, togglePin } from "@/app/actions";
 
 type Post = { id: string; title: string; body: string; pinned: boolean; created_at: Date; author: string | null };
@@ -16,16 +18,48 @@ export default async function DashboardPage() {
       ORDER BY b.pinned DESC, b.created_at DESC LIMIT 20`
   );
   const isAdmin = user.role === "admin";
-  const [vanStatus, equipmentStatus, reminder, pendingRequests] = await Promise.all([
+  const [vanStatus, equipmentStatus, reminder, pendingRequests, notifications, hiddenShifts] = await Promise.all([
     monthlyVanStatus(),
     monthlyEquipmentStatus(),
     availabilityReminder(user.id),
     isAdmin ? pendingChangeRequestCount() : Promise.resolve(0),
+    unreadNotifications(user.id),
+    isAdmin ? hiddenShiftSummary() : Promise.resolve({ count: 0, firstDay: null as string | null }),
   ]);
 
   return (
     <div className="flex flex-col gap-8">
       <h1 className="text-2xl font-semibold">Dashboard</h1>
+
+      {/* In-app notifications (for example, new shifts published). Read ones disappear. */}
+      {notifications.length > 0 && (
+        <section aria-labelledby="notices" className="rounded-lg border border-brand bg-brand-soft p-4">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <h2 id="notices" className="font-semibold">Notifications ({notifications.length})</h2>
+            {notifications.length > 1 && (
+              <form action={markAllNotificationsRead}><button className="rounded border border-line bg-white px-3 py-1.5 text-sm hover:bg-white/60">Mark all as read</button></form>
+            )}
+          </div>
+          <ul className="mt-2 flex flex-col gap-2">
+            {notifications.map((n) => (
+              <li key={n.id} className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm">
+                <span>{n.message}</span>
+                {n.link && <Link href={n.link} className="text-brand-text underline">View</Link>}
+                <form action={markNotificationRead.bind(null, n.id)}><button className="rounded border border-line bg-white px-2 py-1 text-xs hover:bg-white/60">Mark as read<span className="sr-only">: {n.message}</span></button></form>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
+
+      {/* Admins: shifts saved but still hidden from staff. */}
+      {isAdmin && hiddenShifts.count > 0 && (
+        <section aria-labelledby="hidden-shifts" className="rounded-lg border border-warn bg-white p-4">
+          <h2 id="hidden-shifts" className="font-semibold text-warn">{hiddenShifts.count} {hiddenShifts.count === 1 ? "shift is" : "shifts are"} hidden from staff</h2>
+          <p className="mt-1 text-sm">Staff only see shifts after you publish them.</p>
+          <Link href={`/shifts?tab=plan&date=${hiddenShifts.firstDay ?? ""}`} className="mt-2 inline-block text-sm text-brand-text underline">Open the planner</Link>
+        </section>
+      )}
 
       {/* Availability reminder for the following month (overdue once the 15th has passed). */}
       {reminder && (
