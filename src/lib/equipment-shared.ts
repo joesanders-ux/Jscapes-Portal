@@ -24,6 +24,9 @@ export const CATEGORIES = {
   hand_tools: { label: "Hand tools", items: ["grease", "sharpening", "defects", "cleaning"] },
   lawn_mower: { label: "Lawn mowers", items: ["deck", "air_filter", "oil", "fuel", "pull_cord"] },
   petrol: { label: "Petrol equipment", items: ["grease", "sharpening", "defects", "cleaning", "fuel_mix", "oil_attachments"] },
+  // What new equipment gets: the admin does not choose a category when adding it. The other three
+  // are kept so equipment added earlier keeps its checklist and its check history stays comparable.
+  general: { label: "General equipment", items: ["grease", "defects", "cleaning"] },
 } as const satisfies Record<string, { label: string; items: readonly ItemKey[] }>;
 export type CategoryKey = keyof typeof CATEGORIES;
 

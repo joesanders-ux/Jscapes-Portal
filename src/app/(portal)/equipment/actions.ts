@@ -72,9 +72,8 @@ function readFields(fd: FormData) {
 export async function addEquipment(fd: FormData) {
   await requireAdmin();
   const f = readFields(fd);
-  const category = fd.get("category");
   if (!f.name) redirect(`${ASSETS}&error=name`);
-  if (!isCategory(category)) redirect(`${ASSETS}&error=category`);
+  const category = "general"; // no category is chosen when adding: new equipment gets the general checklist
 
   const pdf = await readPdfUpload(fd.get("manual"));
   if (pdf && "error" in pdf) redirect(`${ASSETS}&error=${pdf.error}`);

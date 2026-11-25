@@ -248,12 +248,6 @@ async function AssetsTab({ isAdmin }: { isAdmin: boolean }) {
             <label className="flex flex-col gap-1 text-sm font-medium">Equipment name
               <input name="name" required maxLength={120} className={field} />
             </label>
-            <label className="flex flex-col gap-1 text-sm font-medium">Category (the checklist depends on this and cannot be changed later)
-              <select name="category" required defaultValue="" className={field}>
-                <option value="" disabled>Choose a category</option>
-                {(Object.keys(CATEGORIES) as CategoryKey[]).map((k) => <option key={k} value={k}>{CATEGORIES[k].label}</option>)}
-              </select>
-            </label>
             <label className="flex flex-col gap-1 text-sm font-medium">Model / serial number
               <input name="model_serial" maxLength={200} className={field} />
             </label>
@@ -275,12 +269,14 @@ async function AssetsTab({ isAdmin }: { isAdmin: boolean }) {
       {rows.length === 0 ? (
         <p className="text-ink-muted">No equipment yet.{isAdmin ? " Add the first item above." : " An administrator will add it."}</p>
       ) : (
-        (Object.keys(CATEGORIES) as CategoryKey[]).map((cat) => {
+        (Object.keys(CATEGORIES) as CategoryKey[]).map((cat, _i, all) => {
           const group = rows.filter((r) => r.category === cat);
           if (group.length === 0) return null;
+          // Only show the group headings when equipment falls into more than one group.
+          const grouped = all.filter((c) => rows.some((r) => r.category === c)).length > 1;
           return (
             <section key={cat} aria-labelledby={`cat-${cat}`} className="flex flex-col gap-3">
-              <h2 id={`cat-${cat}`} className="text-xl font-semibold">{CATEGORIES[cat].label}</h2>
+              <h2 id={`cat-${cat}`} className={grouped ? "text-xl font-semibold" : "sr-only"}>{CATEGORIES[cat].label}</h2>
               <ul className="flex flex-col gap-3">
                 {group.map((e) => (
                   <li key={e.id} className="rounded-lg border border-line bg-surface-raised p-4">
