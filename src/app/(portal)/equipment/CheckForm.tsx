@@ -2,7 +2,7 @@
 import { useState } from "react";
 import { useFormState, useFormStatus } from "react-dom";
 import { submitEquipmentCheck, type CheckState } from "./actions";
-import { CATEGORIES, ITEMS, isOptionalItem, type ChecklistKey } from "@/lib/equipment-shared";
+import { CATEGORIES, ITEMS, MAX_CHECK_PHOTOS, isOptionalItem, type ChecklistKey } from "@/lib/equipment-shared";
 
 export type EquipmentOption = { id: string; label: string };
 
@@ -59,6 +59,10 @@ export function CheckForm({ checklist, equipment, defaultEquipment }: { checklis
       <label className="flex flex-col gap-1 text-sm font-medium">
         Notes{needsNotes ? " (required: explain anything not ticked)" : " (optional)"}
         <textarea name="notes" rows={3} maxLength={2000} required={needsNotes} className={field} />
+      </label>
+
+      <label className="flex flex-col gap-1 text-sm font-medium">Add photos to the notes (optional, up to {MAX_CHECK_PHOTOS}; JPEG, PNG or WebP)
+        <input type="file" name="photos" accept="image/jpeg,image/png,image/webp" multiple className={field} />
       </label>
 
       {state.error && <p role="alert" className="rounded border border-danger bg-white p-3 text-sm text-danger">{state.error}</p>}

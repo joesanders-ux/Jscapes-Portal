@@ -34,7 +34,7 @@ Built:
 - **Equipment Maintenance** (visible to everyone): staff submit a monthly check for an item of equipment. The Submit a check tab always
   shows three dropdowns (Hand tools, Lawn mowers, Petrol equipment); opening one shows its tick-box checklist and a Notes box, and the
   person chooses the equipment. Anything not ticked (other than "Sharpening (if required)") is recorded as needing attention and
-  needs an explanation in Notes. Three tabs: Submit a check, History
+  needs an explanation in Notes. Up to 5 photos (JPEG, PNG or WebP, 10 MB each) can be added next to Notes; they show as thumbnails in History and need the same file storage as manuals. Three tabs: Submit a check, History
   (filter by item, checklist, month, needs-attention) and Equipment list (name, brand, model/serial, spare parts, manual PDF, notes). Anyone signed in can update an item's spare parts straight from the list (it changes nothing else, and shows who updated it and when); everything else is admin-only. No category is chosen when adding equipment: the checklist comes from the dropdown used on the check, and each check records which one.
   Admins add, edit, deactivate and reactivate equipment and upload or replace manuals; staff can read the list and open manuals.
   The monthly reminder is a Dashboard banner plus a list on the check tab. Manuals need `FILES_DIR` (see Railway setup)

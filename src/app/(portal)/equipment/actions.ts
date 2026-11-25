@@ -4,7 +4,9 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { db } from "@/lib/db";
 import { requireAdmin, requireUser } from "@/lib/auth";
-import { CATEGORIES, ITEMS, isChecklist, isOptionalItem, type Result } from "@/lib/equipment-shared";
+import { CATEGORIES, ITEMS, MAX_CHECK_PHOTOS, isChecklist, isOptionalItem, type Result } from "@/lib/equipment-shared";
+import { processImage, type ProcessedImage } from "@/lib/job-images";
+import { MAX_IMAGE_BYTES, MAX_UPLOAD_BYTES } from "@/lib/job-images-shared";
 import { deleteFile, readPdfUpload, saveFile, storageConfigured } from "@/lib/storage";
 
 export type CheckState = { error?: string };
@@ -44,6 +46,24 @@ export async function submitEquipmentCheck(_prev: CheckState, fd: FormData): Pro
     return { error: `Not ticked: ${missed.join(", ")}. Tick ${missed.length === 1 ? "it" : "them"}, or explain in Notes why not.` };
   }
 
+  // Photos added next to the Notes box. Each is decoded to make sure it really is a picture; nothing is saved
+  // unless every photo and the whole check are fine.
+  const files = fd.getAll("photos").filter((f): f is File => f instanceof File && f.size > 0);
+  const photos: ProcessedImage[] = [];
+  if (files.length > 0) {
+    if (!storageConfigured()) return { error: "Photos cannot be uploaded yet because file storage is not set up. Submit the check without photos, or ask an administrator." };
+    if (files.length > MAX_CHECK_PHOTOS) return { error: `You can add up to ${MAX_CHECK_PHOTOS} photos to a check.` };
+    if (files.reduce((n, f) => n + f.size, 0) > MAX_UPLOAD_BYTES) return { error: `Those photos are too large together (the limit is ${MAX_UPLOAD_BYTES / 1024 / 1024} MB).` };
+    for (const f of files) {
+      const p = await processImage(f);
+      if ("error" in p) {
+        return { error: p.error === "toobig" ? `"${f.name}" is too large. The limit is ${MAX_IMAGE_BYTES / 1024 / 1024} MB per photo.` : `"${f.name}" is not a usable JPEG, PNG or WebP image. Nothing was submitted.` };
+      }
+      photos.push(p);
+    }
+  }
+
+  const saved: string[] = [];
   const client = await db().connect();
   try {
     await client.query("BEGIN");
@@ -54,9 +74,23 @@ export async function submitEquipmentCheck(_prev: CheckState, fd: FormData): Pro
     for (const a of answers) {
       await client.query("INSERT INTO equipment_check_items (check_id, item_key, result, note) VALUES ($1, $2, $3, $4)", [check.rows[0].id, a.key, a.result, a.note]);
     }
+    for (const img of photos) {
+      const key = `${randomUUID()}.${img.contentType === "image/png" ? "png" : img.contentType === "image/webp" ? "webp" : "jpg"}`;
+      const thumbKey = `${randomUUID()}.jpg`;
+      await saveFile(key, img.buf);
+      saved.push(key);
+      await saveFile(thumbKey, img.thumb);
+      saved.push(thumbKey);
+      await client.query(
+        `INSERT INTO equipment_check_images (check_id, original_filename, content_type, size_bytes, width, height, storage_key, thumb_key)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
+        [check.rows[0].id, img.name, img.contentType, img.buf.length, img.width, img.height, key, thumbKey]
+      );
+    }
     await client.query("COMMIT");
   } catch (err) {
     await client.query("ROLLBACK");
+    for (const k of saved) await deleteFile(k); // don't leave orphan files behind
     throw err;
   } finally {
     client.release();

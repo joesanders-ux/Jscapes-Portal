@@ -133,6 +133,7 @@ async function CheckTab({ isAdmin, preselect }: { isAdmin: boolean; preselect?: 
 
 type CheckRow = {
   id: string; checked_at: Date; name: string; brand: string; model_serial: string; category: CategoryKey; checked_by: string | null; notes: string; flagged: boolean;
+  images: { id: string; name: string }[];
   items: { key: string; result: Result; note: string }[];
 };
 
@@ -147,7 +148,9 @@ async function HistoryTab({ search }: { search: Search }) {
     db().query<CheckRow>(
       `SELECT c.id, c.checked_at, c.notes, e.name, e.brand, e.model_serial, COALESCE(c.checklist, e.category) AS category, u.name AS checked_by,
               COALESCE(bool_or(i.result = 'no'), false) AS flagged,
-              COALESCE(json_agg(json_build_object('key', i.item_key, 'result', i.result, 'note', i.note)) FILTER (WHERE i.item_key IS NOT NULL), '[]') AS items
+              COALESCE(json_agg(json_build_object('key', i.item_key, 'result', i.result, 'note', i.note)) FILTER (WHERE i.item_key IS NOT NULL), '[]') AS items,
+              (SELECT COALESCE(json_agg(json_build_object('id', im.id, 'name', im.original_filename) ORDER BY im.created_at), '[]')
+                 FROM equipment_check_images im WHERE im.check_id = c.id) AS images
          FROM equipment_checks c
          JOIN equipment e ON e.id = c.equipment_id
          LEFT JOIN users u ON u.id = c.checked_by
@@ -212,6 +215,7 @@ async function HistoryTab({ search }: { search: Search }) {
                   <span className="font-semibold">{equipmentLabel(c)}</span>
                   <span className="text-sm text-ink-muted">{CATEGORIES[c.category].label}</span>
                   <span className="text-sm text-ink-muted">{fmtDateTime(c.checked_at)}{c.checked_by ? ` by ${c.checked_by}` : ""}</span>
+                  {c.images.length > 0 && <span className="text-sm text-ink-muted">{c.images.length} {c.images.length === 1 ? "photo" : "photos"}</span>}
                   {c.flagged
                     ? <span className="rounded bg-warn px-2 py-0.5 text-xs font-bold text-white">NEEDS ATTENTION</span>
                     : <span className="rounded border border-brand-text px-2 py-0.5 text-xs font-semibold text-brand-text"><span aria-hidden="true">✓</span> All OK</span>}
@@ -233,6 +237,19 @@ async function HistoryTab({ search }: { search: Search }) {
                     })}
                   </ul>
                   {c.notes && <p className="mt-3 whitespace-pre-line text-sm"><span className="font-semibold">Notes:</span> {c.notes}</p>}
+                  {c.images.length > 0 && (
+                    <ul className="mt-3 flex flex-wrap gap-3" aria-label="Photos added with the notes">
+                      {c.images.map((im, n) => (
+                        <li key={im.id}>
+                          <a href={`/equipment/image/${im.id}`} target="_blank" rel="noopener noreferrer" className="block overflow-hidden rounded border border-line bg-white">
+                            {/* eslint-disable-next-line @next/next/no-img-element */}
+                            <img src={`/equipment/image/${im.id}?size=thumb`} alt={`Photo ${n + 1} of ${c.images.length} added with the notes for ${c.name}`} loading="lazy" decoding="async" className="h-28 w-36 object-cover" />
+                            <span className="sr-only"> (opens full size in a new tab)</span>
+                          </a>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
                 </div>
               </details>
             </li>

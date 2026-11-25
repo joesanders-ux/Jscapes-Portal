@@ -41,3 +41,6 @@ export const RESULT_LABEL: Record<Result, string> = { yes: "Ticked", no: "Not ti
 export const CHECKLISTS = ["hand_tools", "lawn_mower", "petrol"] as const;
 export type ChecklistKey = (typeof CHECKLISTS)[number];
 export const isChecklist = (v: unknown): v is ChecklistKey => typeof v === "string" && (CHECKLISTS as readonly string[]).includes(v);
+
+/** Photos that can be added to one check (next to the Notes box). Each is checked and limited on the server. */
+export const MAX_CHECK_PHOTOS = 5;
