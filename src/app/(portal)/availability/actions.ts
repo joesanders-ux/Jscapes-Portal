@@ -3,7 +3,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { db } from "@/lib/db";
 import { requireAdmin, requireUser } from "@/lib/auth";
-import { addDays, addMonths, fmtShort, isYmd, todayLondon } from "@/lib/dates";
+import { addDays, addMonths, fmtMonth, fmtShort, isYmd, todayLondon } from "@/lib/dates";
 import { isStatus, MAX_DAYS_AHEAD, MAX_REQUEST_SPAN, STATUS_META, type Status } from "@/lib/availability-shared";
 
 export type SubmitState = { error?: string };
@@ -49,8 +49,15 @@ export async function submitAvailability(_prev: SubmitState, fd: FormData): Prom
     [user.id, days, statuses]
   );
   if (res.rowCount === 0) return { error: "Those days were already submitted, so nothing was changed." };
+
+  // Tell the administrators (the link opens the team calendar on that month). Not sent to the person themselves.
+  const n = res.rowCount ?? days.length;
+  await db().query(
+    "INSERT INTO notifications (user_id, message, link) SELECT id, $2, $3 FROM users WHERE role = 'admin' AND active AND id <> $1",
+    [user.id, `${user.name} submitted availability for ${fmtMonth(first)} (${n} ${n === 1 ? "day" : "days"}).`, `/availability?tab=team&view=month&date=${first}`]
+  );
   revalidatePath("/availability");
-  revalidatePath("/");
+  revalidatePath("/", "layout");
   redirect(`/availability?tab=mine&date=${first}&view=month&done=submitted`);
 }
 

@@ -38,6 +38,7 @@ Built:
   (filter by item, checklist, month, needs-attention) and Equipment list (name, brand, model/serial, spare parts, manual PDF, notes). Anyone signed in can update an item's spare parts straight from the list (it changes nothing else, and shows who updated it and when); everything else is admin-only. No category is chosen when adding equipment: the checklist comes from the dropdown used on the check, and each check records which one.
   Admins add, edit, deactivate and reactivate equipment and upload or replace manuals; staff can read the list and open manuals.
   The monthly reminder is a Dashboard banner plus a list on the check tab. Manuals need `FILES_DIR` (see Railway setup)
+- **Notification bell** (top of the menu, everyone): shows the number of unread notifications and links to the Notifications panel on the Dashboard. When anyone submits availability, every other active admin is notified, and the notification opens the Team availability calendar on that month; the calendar shows when each person last submitted. The count updates when a page loads.
 - **Availability** (visible to everyone): Available / Not provided / Not available per day, up to a year ahead. Four tabs: My availability
   (week and month calendar), Submit availability (pick a month, mark days, submit; submitting LOCKS the days, and days left as Not provided are
   locked as Not provided), Change requests (staff ask for a change to locked days and give a reason; admins approve or decline, and approving

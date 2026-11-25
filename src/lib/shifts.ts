@@ -20,3 +20,9 @@ export async function unreadNotifications(userId: string): Promise<Notification[
   );
   return rows;
 }
+
+/** How many unread notifications someone has: the number on the bell. */
+export async function unreadNotificationCount(userId: string): Promise<number> {
+  const { rows } = await db().query<{ n: number }>("SELECT count(*)::int AS n FROM notifications WHERE user_id = $1 AND read_at IS NULL", [userId]);
+  return rows[0].n;
+}

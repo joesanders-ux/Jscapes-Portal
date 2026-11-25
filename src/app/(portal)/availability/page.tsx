@@ -377,11 +377,14 @@ async function TeamTab({ search }: { search: Search }) {
   const days = view === "week"
     ? Array.from({ length: 7 }, (_, i) => addDays(startOfWeek(anchor), i))
     : Array.from({ length: Number(addDays(addMonths(startOfMonth(anchor), 1), -1).slice(8)) }, (_, i) => addDays(startOfMonth(anchor), i));
-  const nextMonth = addMonths(startOfMonth(today), 1);
+  // The status box covers the month being viewed (so a notification can open the right month);
+  // in week view, or for a month that has already passed, it covers next month.
+  const viewedMonth = startOfMonth(anchor);
+  const nextMonth = view === "month" && viewedMonth >= startOfMonth(today) ? viewedMonth : addMonths(startOfMonth(today), 1);
 
   const [people, cells, missing] = await Promise.all([
     db().query<{ id: string; name: string }>("SELECT id, name FROM users WHERE active ORDER BY lower(name)"),
-    db().query<{ user_id: string; day: string; status: Status }>("SELECT user_id, day, status FROM availability_days WHERE day BETWEEN $1 AND $2", [days[0], days[days.length - 1]]),
+    db().query<{ user_id: string; day: string; status: Status; submitted_at: Date }>("SELECT user_id, day, status, submitted_at FROM availability_days WHERE day BETWEEN $1 AND $2", [days[0], days[days.length - 1]]),
     db().query<{ name: string; n: number }>(
       `SELECT u.name, (SELECT count(*)::int FROM availability_days a WHERE a.user_id = u.id AND a.day >= $1::date AND a.day < $2::date) AS n
          FROM users u WHERE u.active ORDER BY lower(u.name)`,
@@ -390,6 +393,13 @@ async function TeamTab({ search }: { search: Search }) {
   ]);
   // The scroll area below is `relative` so its screen-reader-only text stays inside it instead of widening the page.
   const byKey = new Map(cells.rows.map((c) => [`${c.user_id}|${c.day}`, c.status]));
+  // When each person last submitted days in the period on screen, shown under their name.
+  const lastSubmitted = new Map<string, Date>();
+  for (const c of cells.rows) {
+    const prev = lastSubmitted.get(c.user_id);
+    if (!prev || c.submitted_at > prev) lastSubmitted.set(c.user_id, c.submitted_at);
+  }
+  const fmtSubmitted = (d: Date) => new Intl.DateTimeFormat("en-GB", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit", timeZone: "Europe/London" }).format(d);
   const nextMonthDays = Number(addDays(addMonths(nextMonth, 1), -1).slice(8));
   const notDone = missing.rows.filter((m) => m.n < nextMonthDays);
 
@@ -403,7 +413,10 @@ async function TeamTab({ search }: { search: Search }) {
         {notDone.length === 0 ? (
           <p className="mt-1 text-sm">Everyone has entered every day.</p>
         ) : (
-          <p className="mt-1 text-sm">Not fully entered yet ({notDone.length} of {missing.rows.length}): {notDone.map((m) => `${m.name} (${m.n}/${nextMonthDays} days)`).join(", ")}.</p>
+          <>
+            <p className="mt-1 text-sm"><span className="font-semibold">{missing.rows.length - notDone.length} of {missing.rows.length}</span> people have entered every day.</p>
+            <p className="mt-1 text-sm">Not fully entered yet ({notDone.length}): {notDone.map((m) => `${m.name} (${m.n}/${nextMonthDays} days)`).join(", ")}.</p>
+          </>
         )}
       </section>
 
@@ -429,7 +442,12 @@ async function TeamTab({ search }: { search: Search }) {
             <tbody>
               {people.rows.map((p) => (
                 <tr key={p.id}>
-                  <th scope="row" className="sticky left-0 z-10 border-b border-r border-line bg-surface-raised px-2 py-2 text-left text-sm font-medium">{p.name}</th>
+                  <th scope="row" className="sticky left-0 z-10 border-b border-r border-line bg-surface-raised px-2 py-2 text-left text-sm font-medium">
+                    {p.name}
+                    <span className="block text-xs font-normal text-ink-muted">
+                      {lastSubmitted.has(p.id) ? `Submitted ${fmtSubmitted(lastSubmitted.get(p.id)!)}` : "Nothing submitted"}
+                    </span>
+                  </th>
                   {days.map((d) => {
                     const s = byKey.get(`${p.id}|${d}`) ?? "not_provided";
                     const m = STATUS_META[s];
