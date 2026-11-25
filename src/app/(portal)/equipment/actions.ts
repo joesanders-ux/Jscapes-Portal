@@ -5,7 +5,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { db } from "@/lib/db";
 import { requireAdmin, requireUser } from "@/lib/auth";
-import { CATEGORIES, ITEMS, MAX_CHECK_PHOTOS, MAX_EQUIPMENT_IMAGES, isChecklist, isOptionalItem, type Result } from "@/lib/equipment-shared";
+import { CATEGORIES, ITEMS, MAX_CHECK_PHOTOS, MAX_EQUIPMENT_IMAGES, MAX_EQUIPMENT_MANUALS, isChecklist, isOptionalItem, type Result } from "@/lib/equipment-shared";
 import { processImage, type ProcessedImage } from "@/lib/job-images";
 import { MAX_IMAGE_BYTES, MAX_UPLOAD_BYTES } from "@/lib/job-images-shared";
 import { deleteFile, readPdfUpload, saveFile, storageConfigured } from "@/lib/storage";
@@ -152,30 +152,58 @@ async function storeEquipmentImages(client: PoolClient, equipmentId: string, pho
   }
 }
 
+type Manual = { buf: Buffer; name: string };
+
+/** Manuals and pictures arrive in one request, so together they must stay under the upload limit. */
+const uploadTooBig = (fd: FormData) =>
+  [...fd.getAll("manual"), ...fd.getAll("images")].reduce<number>((n, f) => n + (f instanceof File ? f.size : 0), 0) > MAX_UPLOAD_BYTES;
+
+/** Reads and checks the PDFs on an equipment form: each must really be a PDF, and the item can have at most MAX_EQUIPMENT_MANUALS. */
+async function readManuals(fd: FormData, already: number): Promise<{ manuals: Manual[] } | { error: string }> {
+  const files = fd.getAll("manual").filter((f): f is File => f instanceof File && f.size > 0);
+  if (files.length === 0) return { manuals: [] };
+  if (!storageConfigured()) return { error: "storage" };
+  if (already + files.length > MAX_EQUIPMENT_MANUALS) return { error: "manualmany" };
+  if (files.reduce((n, f) => n + f.size, 0) > MAX_UPLOAD_BYTES) return { error: "manualtotal" };
+  const manuals: Manual[] = [];
+  for (const f of files) {
+    const pdf = await readPdfUpload(f);
+    if (pdf && "error" in pdf) return { error: pdf.error };
+    if (pdf) manuals.push(pdf);
+  }
+  return { manuals };
+}
+
+async function storeManuals(client: PoolClient, equipmentId: string, manuals: Manual[], saved: string[]) {
+  for (const m of manuals) {
+    const key = `${randomUUID()}.pdf`;
+    await saveFile(key, m.buf);
+    saved.push(key);
+    await client.query("INSERT INTO equipment_manuals (equipment_id, original_filename, size_bytes, storage_key) VALUES ($1, $2, $3, $4)", [equipmentId, m.name, m.buf.length, key]);
+  }
+}
+
 export async function addEquipment(fd: FormData) {
   await requireAdmin();
   const f = readFields(fd);
   if (!f.name) redirect(`${ASSETS}&error=name`);
   const category = "general"; // no category is chosen when adding: new equipment gets the general checklist
 
-  const pdf = await readPdfUpload(fd.get("manual"));
-  if (pdf && "error" in pdf) redirect(`${ASSETS}&error=${pdf.error}`);
-  if (pdf && !storageConfigured()) redirect(`${ASSETS}&error=storage`);
-
+  if (uploadTooBig(fd)) redirect(`${ASSETS}&error=manualtotal`);
+  const pdfs = await readManuals(fd, 0);
+  if ("error" in pdfs) redirect(`${ASSETS}&error=${pdfs.error}`);
   const imgs = await readEquipmentImages(fd, 0);
   if ("error" in imgs) redirect(`${ASSETS}&error=${imgs.error}`);
 
-  const key = pdf ? `${randomUUID()}.pdf` : null;
   const saved: string[] = [];
-  if (pdf && key) { await saveFile(key, pdf.buf); saved.push(key); }
   const client = await db().connect();
   try {
     await client.query("BEGIN");
     const row = await client.query<{ id: string }>(
-      `INSERT INTO equipment (name, category, brand, model_serial, spare_parts, notes, manual_key, manual_filename, manual_size)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING id`,
-      [f.name, category, f.brand, f.modelSerial, f.spareParts, f.notes, key, pdf?.name ?? null, pdf?.buf.length ?? null]
+      `INSERT INTO equipment (name, category, brand, model_serial, spare_parts, notes) VALUES ($1, $2, $3, $4, $5, $6) RETURNING id`,
+      [f.name, category, f.brand, f.modelSerial, f.spareParts, f.notes]
     );
+    await storeManuals(client, row.rows[0].id, pdfs.manuals, saved);
     await storeEquipmentImages(client, row.rows[0].id, imgs.photos, saved);
     await client.query("COMMIT");
   } catch (err) {
@@ -187,77 +215,59 @@ export async function addEquipment(fd: FormData) {
   }
   revalidatePath("/equipment");
   revalidatePath("/");
-  redirect(`${ASSETS}&done=added`);
+  // `n` changes every time, so the page treats the Add form as a new one and shows it empty, ready for the next item.
+  redirect(`${ASSETS}&done=added&n=${Date.now()}`);
 }
 
-/** Edits the details. The category is fixed. A new manual replaces the old one; the box removes it. */
+/** Edits the details. The category is fixed. New manuals and pictures are added to the existing ones; ticked ones are removed. */
 export async function updateEquipment(id: string, fd: FormData) {
   const admin = await requireAdmin();
   if (!uuid(id)) redirect(`${ASSETS}&error=missing`);
   const f = readFields(fd);
   if (!f.name) redirect(`${ASSETS}&error=name`);
 
-  const existing = await db().query<{ manual_key: string | null }>("SELECT manual_key FROM equipment WHERE id = $1", [id]);
+  const existing = await db().query("SELECT 1 FROM equipment WHERE id = $1", [id]);
   if (!existing.rows[0]) redirect(`${ASSETS}&error=missing`);
-  const oldKey = existing.rows[0].manual_key;
 
-  // Pictures: which current ones are being removed, and whether the new ones fit and are real images.
-  const current = await db().query<{ id: string; storage_key: string; thumb_key: string }>("SELECT id, storage_key, thumb_key FROM equipment_images WHERE equipment_id = $1", [id]);
-  const wanted = new Set(fd.getAll("remove_image").map(String));
-  const removing = current.rows.filter((r) => wanted.has(r.id));
-  const imgs = await readEquipmentImages(fd, current.rows.length - removing.length);
+  // Which current manuals and pictures are being removed, and whether the new ones fit and are real files.
+  const curManuals = await db().query<{ id: string; storage_key: string }>("SELECT id, storage_key FROM equipment_manuals WHERE equipment_id = $1", [id]);
+  const curImages = await db().query<{ id: string; storage_key: string; thumb_key: string }>("SELECT id, storage_key, thumb_key FROM equipment_images WHERE equipment_id = $1", [id]);
+  const wantManuals = new Set(fd.getAll("remove_manual").map(String));
+  const wantImages = new Set(fd.getAll("remove_image").map(String));
+  const removingManuals = curManuals.rows.filter((r) => wantManuals.has(r.id));
+  const removingImages = curImages.rows.filter((r) => wantImages.has(r.id));
+  if (uploadTooBig(fd)) redirect(`${ASSETS}&error=manualtotal`);
+  const pdfs = await readManuals(fd, curManuals.rows.length - removingManuals.length);
+  if ("error" in pdfs) redirect(`${ASSETS}&error=${pdfs.error}`);
+  const imgs = await readEquipmentImages(fd, curImages.rows.length - removingImages.length);
   if ("error" in imgs) redirect(`${ASSETS}&error=${imgs.error}`);
 
-  const pdf = await readPdfUpload(fd.get("manual"));
-  if (pdf && "error" in pdf) redirect(`${ASSETS}&error=${pdf.error}`);
-  if (pdf && !storageConfigured()) redirect(`${ASSETS}&error=storage`);
-  const removeManual = fd.get("remove_manual") === "on";
-
-  let newKey: string | null = null;
-  if (pdf) {
-    newKey = `${randomUUID()}.pdf`;
-    await saveFile(newKey, pdf.buf);
-  }
+  const saved: string[] = [];
+  const client = await db().connect();
   try {
-    if (pdf && newKey) {
-      await db().query(
-        `UPDATE equipment SET name=$2, brand=$3, model_serial=$4, spare_parts=$5, notes=$6, manual_key=$7, manual_filename=$8, manual_size=$9, spare_parts_updated_at = CASE WHEN spare_parts IS DISTINCT FROM $5 THEN now() ELSE spare_parts_updated_at END, spare_parts_updated_by = CASE WHEN spare_parts IS DISTINCT FROM $5 THEN $10::uuid ELSE spare_parts_updated_by END WHERE id=$1`,
-        [id, f.name, f.brand, f.modelSerial, f.spareParts, f.notes, newKey, pdf.name, pdf.buf.length, admin.id]
-      );
-    } else if (removeManual) {
-      await db().query(
-        `UPDATE equipment SET name=$2, brand=$3, model_serial=$4, spare_parts=$5, notes=$6, manual_key=NULL, manual_filename=NULL, manual_size=NULL, spare_parts_updated_at = CASE WHEN spare_parts IS DISTINCT FROM $5 THEN now() ELSE spare_parts_updated_at END, spare_parts_updated_by = CASE WHEN spare_parts IS DISTINCT FROM $5 THEN $7::uuid ELSE spare_parts_updated_by END WHERE id=$1`,
-        [id, f.name, f.brand, f.modelSerial, f.spareParts, f.notes, admin.id]
-      );
-    } else {
-      await db().query(`UPDATE equipment SET name=$2, brand=$3, model_serial=$4, spare_parts=$5, notes=$6, spare_parts_updated_at = CASE WHEN spare_parts IS DISTINCT FROM $5 THEN now() ELSE spare_parts_updated_at END, spare_parts_updated_by = CASE WHEN spare_parts IS DISTINCT FROM $5 THEN $7::uuid ELSE spare_parts_updated_by END WHERE id=$1`, [id, f.name, f.brand, f.modelSerial, f.spareParts, f.notes, admin.id]);
-    }
+    await client.query("BEGIN");
+    await client.query(
+      `UPDATE equipment SET name=$2, brand=$3, model_serial=$4, spare_parts=$5, notes=$6,
+              spare_parts_updated_at = CASE WHEN spare_parts IS DISTINCT FROM $5 THEN now() ELSE spare_parts_updated_at END,
+              spare_parts_updated_by = CASE WHEN spare_parts IS DISTINCT FROM $5 THEN $7::uuid ELSE spare_parts_updated_by END
+        WHERE id=$1`,
+      [id, f.name, f.brand, f.modelSerial, f.spareParts, f.notes, admin.id]
+    );
+    if (removingManuals.length) await client.query("DELETE FROM equipment_manuals WHERE equipment_id = $1 AND id = ANY($2::uuid[])", [id, removingManuals.map((r) => r.id)]);
+    if (removingImages.length) await client.query("DELETE FROM equipment_images WHERE equipment_id = $1 AND id = ANY($2::uuid[])", [id, removingImages.map((r) => r.id)]);
+    await storeManuals(client, id, pdfs.manuals, saved);
+    await storeEquipmentImages(client, id, imgs.photos, saved);
+    await client.query("COMMIT");
   } catch (err) {
-    if (newKey) await deleteFile(newKey);
+    await client.query("ROLLBACK");
+    for (const k of saved) await deleteFile(k);
     throw err;
+  } finally {
+    client.release();
   }
-  // Only once the database points at the new state is the old file removed.
-  if (oldKey && (newKey || removeManual)) await deleteFile(oldKey);
-
-  if (removing.length > 0 || imgs.photos.length > 0) {
-    const saved: string[] = [];
-    const client = await db().connect();
-    try {
-      await client.query("BEGIN");
-      if (removing.length > 0) {
-        await client.query("DELETE FROM equipment_images WHERE equipment_id = $1 AND id = ANY($2::uuid[])", [id, removing.map((r) => r.id)]);
-      }
-      await storeEquipmentImages(client, id, imgs.photos, saved);
-      await client.query("COMMIT");
-    } catch (err) {
-      await client.query("ROLLBACK");
-      for (const k of saved) await deleteFile(k);
-      throw err;
-    } finally {
-      client.release();
-    }
-    for (const r of removing) { await deleteFile(r.storage_key); await deleteFile(r.thumb_key); }
-  }
+  // Only once the database points at the new state are the removed files deleted.
+  for (const r of removingManuals) await deleteFile(r.storage_key);
+  for (const r of removingImages) { await deleteFile(r.storage_key); await deleteFile(r.thumb_key); }
   revalidatePath("/equipment");
   redirect(`${ASSETS}&done=updated`);
 }
@@ -273,7 +283,7 @@ export async function setEquipmentActive(id: string, active: boolean) {
 }
 
 /**
- * Permanently deletes an item, its pictures, its manual and its past checks (with their photos). Admin only.
+ * Permanently deletes an item, its pictures, its manuals and its past checks (with their photos). Admin only.
  * The database keeps its safety net (checks restrict deleting equipment), so the checks are removed here, explicitly,
  * in one transaction, and only when the admin has ticked the confirmation. Files are removed after the commit.
  */
@@ -282,8 +292,9 @@ export async function deleteEquipment(id: string, fd: FormData) {
   if (!uuid(id)) redirect(`${ASSETS}&error=missing`);
   if (fd.get("confirm_delete") !== "on") redirect(`${ASSETS}&error=confirmdelete`);
 
-  const item = await db().query<{ manual_key: string | null }>("SELECT manual_key FROM equipment WHERE id = $1", [id]);
+  const item = await db().query("SELECT 1 FROM equipment WHERE id = $1", [id]);
   if (!item.rows[0]) redirect(`${ASSETS}&error=missing`);
+  const manuals = await db().query<{ storage_key: string }>("SELECT storage_key FROM equipment_manuals WHERE equipment_id = $1", [id]);
   const pics = await db().query<{ storage_key: string; thumb_key: string }>("SELECT storage_key, thumb_key FROM equipment_images WHERE equipment_id = $1", [id]);
   const checkPics = await db().query<{ storage_key: string; thumb_key: string }>(
     "SELECT im.storage_key, im.thumb_key FROM equipment_check_images im JOIN equipment_checks c ON c.id = im.check_id WHERE c.equipment_id = $1",
@@ -305,7 +316,7 @@ export async function deleteEquipment(id: string, fd: FormData) {
   }
   // The rows are gone, so now the files can go too. A missing file is not an error.
   const keys = [...pics.rows, ...checkPics.rows].flatMap((r) => [r.storage_key, r.thumb_key]);
-  if (item.rows[0].manual_key) keys.push(item.rows[0].manual_key);
+  for (const m of manuals.rows) keys.push(m.storage_key);
   for (const k of keys) await deleteFile(k);
   revalidatePath("/equipment");
   revalidatePath("/");

@@ -2,22 +2,24 @@ import Link from "next/link";
 import { db } from "@/lib/db";
 import { requireUser } from "@/lib/auth";
 import { monthlyEquipmentStatus } from "@/lib/equipment";
-import { CATEGORIES, CHECKLISTS, ITEMS, MAX_EQUIPMENT_IMAGES, RESULT_LABEL, isCategory, isItemKey, type CategoryKey, type Result } from "@/lib/equipment-shared";
+import { CATEGORIES, CHECKLISTS, ITEMS, MAX_EQUIPMENT_IMAGES, MAX_EQUIPMENT_MANUALS, RESULT_LABEL, isCategory, isItemKey, type CategoryKey, type Result } from "@/lib/equipment-shared";
 import { MAX_IMAGE_BYTES, MAX_UPLOAD_BYTES } from "@/lib/job-images-shared";
 import { MAX_PDF_BYTES, storageConfigured } from "@/lib/storage";
 import { CheckForm } from "./CheckForm";
 import { addEquipment, deleteEquipment, setEquipmentActive, updateEquipment, updateSpareParts } from "./actions";
 
-type Search = { tab?: string; equipment?: string; category?: string; month?: string; issues?: string; error?: string; done?: string };
+type Search = { n?: string; tab?: string; equipment?: string; category?: string; month?: string; issues?: string; error?: string; done?: string };
 
 const ERRORS: Record<string, string> = {
   name: "Enter a name for the equipment.",
   category: "Choose a category.",
   missing: "That equipment no longer exists.",
   confirmdelete: "Tick the box to confirm before deleting equipment. Nothing was deleted.",
-  toobig: `That file is too big. Manuals must be ${MAX_PDF_BYTES / 1024 / 1024} MB or smaller.`,
-  notpdf: "That file is not a PDF. Upload the manual as a PDF.",
+  toobig: `That file is too big. Each manual must be ${MAX_PDF_BYTES / 1024 / 1024} MB or smaller.`,
+  notpdf: "One of the files is not a PDF. Manuals must be PDF files. Nothing was saved.",
   storage: "File storage is not set up yet, so manuals and pictures cannot be uploaded. The equipment can still be added without them.",
+  manualmany: `An item can have up to ${MAX_EQUIPMENT_MANUALS} manuals. Remove some first, or add fewer. Nothing was saved.`,
+  manualtotal: `Those files are too large together (the limit is ${MAX_UPLOAD_BYTES / 1024 / 1024} MB at a time for manuals and pictures). Nothing was saved.`,
   imgmany: `An item can have up to ${MAX_EQUIPMENT_IMAGES} pictures. Remove some first, or add fewer. Nothing was saved.`,
   imgtotal: `Those pictures are too large together (the limit is ${MAX_UPLOAD_BYTES / 1024 / 1024} MB at a time). Nothing was saved.`,
   imgbig: `One of the pictures is too large. The limit is ${MAX_IMAGE_BYTES / 1024 / 1024} MB per picture. Nothing was saved.`,
@@ -30,7 +32,7 @@ const DONE: Record<string, string> = {
   deactivated: "Equipment deactivated. It is hidden from the check form and reminders, and its past checks are kept.",
   restored: "Equipment restored to the active list.",
   spare: "Spare parts saved.",
-  deleted: "Equipment deleted, together with its pictures, manual and past checks.",
+  deleted: "Equipment deleted, together with its pictures, manuals and past checks.",
 };
 
 const uuid = (s: unknown): s is string => typeof s === "string" && /^[0-9a-f-]{36}$/i.test(s);
@@ -80,7 +82,7 @@ export default async function EquipmentPage({ searchParams }: { searchParams: Se
 
       {tab === "check" && <CheckTab isAdmin={isAdmin} preselect={searchParams.equipment} />}
       {tab === "history" && <HistoryTab search={searchParams} />}
-      {tab === "assets" && <AssetsTab isAdmin={isAdmin} />}
+      {tab === "assets" && <AssetsTab isAdmin={isAdmin} formKey={searchParams.done === "added" ? `added-${searchParams.n ?? ""}` : "form"} />}
     </div>
   );
 }
@@ -269,14 +271,16 @@ async function HistoryTab({ search }: { search: Search }) {
 
 type Asset = {
   id: string; name: string; category: CategoryKey; brand: string; model_serial: string; spare_parts: string; notes: string;
-  manual_filename: string | null; manual_size: number | null; active: boolean; last_checked: Date | null; check_count: number;
+  manuals: { id: string; name: string; size: number }[]; active: boolean; last_checked: Date | null; check_count: number;
   spare_parts_updated_at: Date | null; spare_parts_updated_by_name: string | null; images: { id: string; name: string }[];
 };
 
-async function AssetsTab({ isAdmin }: { isAdmin: boolean }) {
+async function AssetsTab({ isAdmin, formKey }: { isAdmin: boolean; formKey: string }) {
   // Staff see the active equipment. Admins also see deactivated items so they can restore them.
   const { rows } = await db().query<Asset>(
-    `SELECT e.id, e.name, e.category, e.brand, e.model_serial, e.spare_parts, e.notes, e.manual_filename, e.manual_size, e.active,
+    `SELECT e.id, e.name, e.category, e.brand, e.model_serial, e.spare_parts, e.notes, e.active,
+            (SELECT COALESCE(json_agg(json_build_object('id', m.id, 'name', m.original_filename, 'size', m.size_bytes) ORDER BY m.created_at), '[]')
+               FROM equipment_manuals m WHERE m.equipment_id = e.id) AS manuals,
             e.spare_parts_updated_at, su.name AS spare_parts_updated_by_name,
             (SELECT COALESCE(json_agg(json_build_object('id', im.id, 'name', im.original_filename) ORDER BY im.created_at), '[]')
                FROM equipment_images im WHERE im.equipment_id = e.id) AS images,
@@ -293,7 +297,7 @@ async function AssetsTab({ isAdmin }: { isAdmin: boolean }) {
   return (
     <>
       {isAdmin && (
-        <form action={addEquipment} className="flex flex-col gap-3 rounded-lg border border-line bg-surface-raised p-4">
+        <form key={formKey} action={addEquipment} className="flex flex-col gap-3 rounded-lg border border-line bg-surface-raised p-4">
           <h2 className="font-semibold">Add equipment</h2>
           <div className="grid gap-3 sm:grid-cols-2">
             <label className="flex flex-col gap-1 text-sm font-medium">Equipment name
@@ -305,8 +309,8 @@ async function AssetsTab({ isAdmin }: { isAdmin: boolean }) {
             <label className="flex flex-col gap-1 text-sm font-medium">Model / serial number
               <input name="model_serial" maxLength={200} className={field} />
             </label>
-            <label className="flex flex-col gap-1 text-sm font-medium">Manual (PDF, optional)
-              <input type="file" name="manual" accept="application/pdf,.pdf" className={field} />
+            <label className="flex flex-col gap-1 text-sm font-medium">Manuals (PDF, optional, up to {MAX_EQUIPMENT_MANUALS})
+              <input type="file" name="manual" accept="application/pdf,.pdf" multiple className={field} />
             </label>
           </div>
           <label className="flex flex-col gap-1 text-sm font-medium">Pictures (optional, up to {MAX_EQUIPMENT_IMAGES}, JPEG, PNG or WebP)
@@ -367,11 +371,20 @@ async function AssetsTab({ isAdmin }: { isAdmin: boolean }) {
                           </details>
                         )}
                       </dd>
-                      <dt className="text-ink-muted">Manual</dt>
+                      <dt className="text-ink-muted">{e.manuals.length > 1 ? "Manuals" : "Manual"}</dt>
                       <dd>
-                        {e.manual_filename
-                          ? <a href={`/equipment/manual/${e.id}`} target="_blank" rel="noopener" className="text-brand-text underline">Open manual (PDF){e.manual_size ? `, ${Math.max(1, Math.round(e.manual_size / 1024))} KB` : ""}<span className="sr-only"> for {e.name}</span></a>
-                          : "No manual uploaded"}
+                        {e.manuals.length === 0 ? "No manual uploaded" : (
+                          <ul className="flex flex-col gap-1">
+                            {e.manuals.map((m) => (
+                              <li key={m.id}>
+                                <a href={`/equipment/manual/${m.id}`} target="_blank" rel="noopener" className="text-brand-text underline">
+                                  {m.name}<span className="sr-only"> (PDF, opens in a new tab), manual for {e.name}</span>
+                                </a>
+                                <span className="text-ink-muted"> ({Math.max(1, Math.round(m.size / 1024))} KB)</span>
+                              </li>
+                            ))}
+                          </ul>
+                        )}
                       </dd>
                       <dt className="text-ink-muted">Notes</dt>
                       <dd className="whitespace-pre-line">{e.notes || "None"}</dd>
@@ -413,13 +426,18 @@ async function AssetsTab({ isAdmin }: { isAdmin: boolean }) {
                             <label className="flex flex-col gap-1 text-sm font-medium">Notes
                               <textarea name="notes" rows={2} maxLength={2000} defaultValue={e.notes} className={field} />
                             </label>
-                            <label className="flex flex-col gap-1 text-sm font-medium">{e.manual_filename ? "Replace manual (PDF)" : "Upload manual (PDF)"}
-                              <input type="file" name="manual" accept="application/pdf,.pdf" className={field} />
+                            <label className="flex flex-col gap-1 text-sm font-medium">Add manuals (PDF, {e.manuals.length} of {MAX_EQUIPMENT_MANUALS} used)
+                              <input type="file" name="manual" accept="application/pdf,.pdf" multiple className={field} />
                             </label>
-                            {e.manual_filename && (
-                              <label className="flex min-h-11 items-center gap-2 text-sm">
-                                <input type="checkbox" name="remove_manual" className="h-5 w-5 accent-brand-text" /> Remove the current manual (ignored if you upload a new one)
-                              </label>
+                            {e.manuals.length > 0 && (
+                              <fieldset className="flex flex-col">
+                                <legend className="text-sm font-medium">Tick any manual to remove it when you save</legend>
+                                {e.manuals.map((m) => (
+                                  <label key={m.id} className="flex min-h-11 items-center gap-2 text-sm">
+                                    <input type="checkbox" name="remove_manual" value={m.id} className="h-5 w-5 accent-brand-text" /> Remove {m.name}
+                                  </label>
+                                ))}
+                              </fieldset>
                             )}
                             <label className="flex flex-col gap-1 text-sm font-medium">Add pictures ({e.images.length} of {MAX_EQUIPMENT_IMAGES} used, JPEG, PNG or WebP)
                               <input type="file" name="images" accept="image/jpeg,image/png,image/webp" multiple className={field} />
@@ -450,7 +468,7 @@ async function AssetsTab({ isAdmin }: { isAdmin: boolean }) {
                           <summary className="cursor-pointer px-3 py-2 text-sm font-medium text-danger">Delete equipment<span className="sr-only"> {e.name}</span></summary>
                           <form action={deleteEquipment.bind(null, e.id)} className="flex flex-col gap-3 border-t border-line p-3">
                             <p className="text-sm">
-                              This permanently deletes <strong>{e.name}</strong>, its pictures and its manual
+                              This permanently deletes <strong>{e.name}</strong>, its pictures and its manuals
                               {e.check_count > 0 ? <>, and its <strong>{e.check_count} past {e.check_count === 1 ? "check" : "checks"}</strong> with their photos</> : ""}. It cannot be undone.
                               {e.active && " To hide it but keep its history, use Deactivate instead."}
                             </p>

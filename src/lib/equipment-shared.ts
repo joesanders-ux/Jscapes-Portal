@@ -46,3 +46,5 @@ export const isChecklist = (v: unknown): v is ChecklistKey => typeof v === "stri
 export const MAX_CHECK_PHOTOS = 5;
 /** Most pictures one item on the Equipment list can have. */
 export const MAX_EQUIPMENT_IMAGES = 10;
+/** Most manuals (PDFs) one item on the Equipment list can have. */
+export const MAX_EQUIPMENT_MANUALS = 10;
