@@ -6,7 +6,7 @@ import { CATEGORIES, CHECKLISTS, ITEMS, MAX_EQUIPMENT_IMAGES, RESULT_LABEL, isCa
 import { MAX_IMAGE_BYTES, MAX_UPLOAD_BYTES } from "@/lib/job-images-shared";
 import { MAX_PDF_BYTES, storageConfigured } from "@/lib/storage";
 import { CheckForm } from "./CheckForm";
-import { addEquipment, setEquipmentActive, updateEquipment, updateSpareParts } from "./actions";
+import { addEquipment, deleteEquipment, setEquipmentActive, updateEquipment, updateSpareParts } from "./actions";
 
 type Search = { tab?: string; equipment?: string; category?: string; month?: string; issues?: string; error?: string; done?: string };
 
@@ -14,6 +14,7 @@ const ERRORS: Record<string, string> = {
   name: "Enter a name for the equipment.",
   category: "Choose a category.",
   missing: "That equipment no longer exists.",
+  confirmdelete: "Tick the box to confirm before deleting equipment. Nothing was deleted.",
   toobig: `That file is too big. Manuals must be ${MAX_PDF_BYTES / 1024 / 1024} MB or smaller.`,
   notpdf: "That file is not a PDF. Upload the manual as a PDF.",
   storage: "File storage is not set up yet, so manuals and pictures cannot be uploaded. The equipment can still be added without them.",
@@ -29,6 +30,7 @@ const DONE: Record<string, string> = {
   deactivated: "Equipment deactivated. It is hidden from the check form and reminders, and its past checks are kept.",
   restored: "Equipment restored to the active list.",
   spare: "Spare parts saved.",
+  deleted: "Equipment deleted, together with its pictures, manual and past checks.",
 };
 
 const uuid = (s: unknown): s is string => typeof s === "string" && /^[0-9a-f-]{36}$/i.test(s);
@@ -267,7 +269,7 @@ async function HistoryTab({ search }: { search: Search }) {
 
 type Asset = {
   id: string; name: string; category: CategoryKey; brand: string; model_serial: string; spare_parts: string; notes: string;
-  manual_filename: string | null; manual_size: number | null; active: boolean; last_checked: Date | null;
+  manual_filename: string | null; manual_size: number | null; active: boolean; last_checked: Date | null; check_count: number;
   spare_parts_updated_at: Date | null; spare_parts_updated_by_name: string | null; images: { id: string; name: string }[];
 };
 
@@ -278,7 +280,8 @@ async function AssetsTab({ isAdmin }: { isAdmin: boolean }) {
             e.spare_parts_updated_at, su.name AS spare_parts_updated_by_name,
             (SELECT COALESCE(json_agg(json_build_object('id', im.id, 'name', im.original_filename) ORDER BY im.created_at), '[]')
                FROM equipment_images im WHERE im.equipment_id = e.id) AS images,
-            (SELECT max(c.checked_at) FROM equipment_checks c WHERE c.equipment_id = e.id) AS last_checked
+            (SELECT max(c.checked_at) FROM equipment_checks c WHERE c.equipment_id = e.id) AS last_checked,
+            (SELECT count(*)::int FROM equipment_checks c WHERE c.equipment_id = e.id) AS check_count
        FROM equipment e
        LEFT JOIN users su ON su.id = e.spare_parts_updated_by
       WHERE e.active OR $1::boolean
@@ -443,6 +446,20 @@ async function AssetsTab({ isAdmin }: { isAdmin: boolean }) {
                         <form action={setEquipmentActive.bind(null, e.id, !e.active)}>
                           <button className={small}>{e.active ? "Deactivate" : "Reactivate"}<span className="sr-only"> {e.name}</span></button>
                         </form>
+                        <details className="rounded border border-danger">
+                          <summary className="cursor-pointer px-3 py-2 text-sm font-medium text-danger">Delete equipment<span className="sr-only"> {e.name}</span></summary>
+                          <form action={deleteEquipment.bind(null, e.id)} className="flex flex-col gap-3 border-t border-line p-3">
+                            <p className="text-sm">
+                              This permanently deletes <strong>{e.name}</strong>, its pictures and its manual
+                              {e.check_count > 0 ? <>, and its <strong>{e.check_count} past {e.check_count === 1 ? "check" : "checks"}</strong> with their photos</> : ""}. It cannot be undone.
+                              {e.active && " To hide it but keep its history, use Deactivate instead."}
+                            </p>
+                            <label className="flex min-h-11 items-center gap-2 text-sm">
+                              <input type="checkbox" name="confirm_delete" required className="h-5 w-5 accent-brand-text" /> Yes, permanently delete {e.name}
+                            </label>
+                            <button className="self-start rounded border border-danger bg-white px-4 py-2 text-sm font-medium text-danger hover:bg-surface">Delete permanently</button>
+                          </form>
+                        </details>
                       </div>
                     )}
                   </li>
@@ -452,7 +469,7 @@ async function AssetsTab({ isAdmin }: { isAdmin: boolean }) {
           );
         })
       )}
-      {isAdmin && <p className="text-sm text-ink-muted">Deactivating equipment hides it from the check form and monthly reminders. Its past checks are kept.</p>}
+      {isAdmin && <p className="text-sm text-ink-muted">Deactivating equipment hides it from the check form and monthly reminders. Its past checks are kept. Deleting removes it for good, with its checks.</p>}
     </>
   );
 }

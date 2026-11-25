@@ -273,6 +273,46 @@ export async function setEquipmentActive(id: string, active: boolean) {
 }
 
 /**
+ * Permanently deletes an item, its pictures, its manual and its past checks (with their photos). Admin only.
+ * The database keeps its safety net (checks restrict deleting equipment), so the checks are removed here, explicitly,
+ * in one transaction, and only when the admin has ticked the confirmation. Files are removed after the commit.
+ */
+export async function deleteEquipment(id: string, fd: FormData) {
+  await requireAdmin();
+  if (!uuid(id)) redirect(`${ASSETS}&error=missing`);
+  if (fd.get("confirm_delete") !== "on") redirect(`${ASSETS}&error=confirmdelete`);
+
+  const item = await db().query<{ manual_key: string | null }>("SELECT manual_key FROM equipment WHERE id = $1", [id]);
+  if (!item.rows[0]) redirect(`${ASSETS}&error=missing`);
+  const pics = await db().query<{ storage_key: string; thumb_key: string }>("SELECT storage_key, thumb_key FROM equipment_images WHERE equipment_id = $1", [id]);
+  const checkPics = await db().query<{ storage_key: string; thumb_key: string }>(
+    "SELECT im.storage_key, im.thumb_key FROM equipment_check_images im JOIN equipment_checks c ON c.id = im.check_id WHERE c.equipment_id = $1",
+    [id]
+  );
+
+  const client = await db().connect();
+  try {
+    await client.query("BEGIN");
+    // Check answers and check photos go with their check (ON DELETE CASCADE); equipment pictures go with the item.
+    await client.query("DELETE FROM equipment_checks WHERE equipment_id = $1", [id]);
+    await client.query("DELETE FROM equipment WHERE id = $1", [id]);
+    await client.query("COMMIT");
+  } catch (err) {
+    await client.query("ROLLBACK");
+    throw err;
+  } finally {
+    client.release();
+  }
+  // The rows are gone, so now the files can go too. A missing file is not an error.
+  const keys = [...pics.rows, ...checkPics.rows].flatMap((r) => [r.storage_key, r.thumb_key]);
+  if (item.rows[0].manual_key) keys.push(item.rows[0].manual_key);
+  for (const k of keys) await deleteFile(k);
+  revalidatePath("/equipment");
+  revalidatePath("/");
+  redirect(`${ASSETS}&done=deleted`);
+}
+
+/**
  * Updates only the spare parts. Open to everyone who is signed in (staff can keep the list current),
  * and it changes nothing else. Staff can edit active equipment; admins can also edit deactivated items.
  */
