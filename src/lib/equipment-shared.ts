@@ -44,3 +44,5 @@ export const isChecklist = (v: unknown): v is ChecklistKey => typeof v === "stri
 
 /** Photos that can be added to one check (next to the Notes box). Each is checked and limited on the server. */
 export const MAX_CHECK_PHOTOS = 5;
+/** Most pictures one item on the Equipment list can have. */
+export const MAX_EQUIPMENT_IMAGES = 10;

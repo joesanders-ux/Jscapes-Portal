@@ -1,10 +1,11 @@
 "use server";
 import { randomUUID } from "node:crypto";
+import type { PoolClient } from "pg";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { db } from "@/lib/db";
 import { requireAdmin, requireUser } from "@/lib/auth";
-import { CATEGORIES, ITEMS, MAX_CHECK_PHOTOS, isChecklist, isOptionalItem, type Result } from "@/lib/equipment-shared";
+import { CATEGORIES, ITEMS, MAX_CHECK_PHOTOS, MAX_EQUIPMENT_IMAGES, isChecklist, isOptionalItem, type Result } from "@/lib/equipment-shared";
 import { processImage, type ProcessedImage } from "@/lib/job-images";
 import { MAX_IMAGE_BYTES, MAX_UPLOAD_BYTES } from "@/lib/job-images-shared";
 import { deleteFile, readPdfUpload, saveFile, storageConfigured } from "@/lib/storage";
@@ -112,6 +113,45 @@ function readFields(fd: FormData) {
   };
 }
 
+
+const extFor = (t: ProcessedImage["contentType"]) => (t === "image/png" ? "png" : t === "image/webp" ? "webp" : "jpg");
+
+/**
+ * Reads and checks the pictures on an equipment form. Each one is decoded to make sure it really is a picture.
+ * `already` is how many the item has after any removals, so the total can never go over the limit.
+ */
+async function readEquipmentImages(fd: FormData, already: number): Promise<{ photos: ProcessedImage[] } | { error: string }> {
+  const files = fd.getAll("images").filter((f): f is File => f instanceof File && f.size > 0);
+  if (files.length === 0) return { photos: [] };
+  if (!storageConfigured()) return { error: "storage" };
+  if (already + files.length > MAX_EQUIPMENT_IMAGES) return { error: "imgmany" };
+  if (files.reduce((n, f) => n + f.size, 0) > MAX_UPLOAD_BYTES) return { error: "imgtotal" };
+  const photos: ProcessedImage[] = [];
+  for (const f of files) {
+    const p = await processImage(f);
+    if ("error" in p) return { error: p.error === "toobig" ? "imgbig" : "imgbad" };
+    photos.push(p);
+  }
+  return { photos };
+}
+
+/** Saves the files and inserts the rows for new pictures. Returns the file keys written, so a failure can remove them. */
+async function storeEquipmentImages(client: PoolClient, equipmentId: string, photos: ProcessedImage[], saved: string[]) {
+  for (const img of photos) {
+    const key = `${randomUUID()}.${extFor(img.contentType)}`;
+    const thumbKey = `${randomUUID()}.jpg`;
+    await saveFile(key, img.buf);
+    saved.push(key);
+    await saveFile(thumbKey, img.thumb);
+    saved.push(thumbKey);
+    await client.query(
+      `INSERT INTO equipment_images (equipment_id, original_filename, content_type, size_bytes, width, height, storage_key, thumb_key)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
+      [equipmentId, img.name, img.contentType, img.buf.length, img.width, img.height, key, thumbKey]
+    );
+  }
+}
+
 export async function addEquipment(fd: FormData) {
   await requireAdmin();
   const f = readFields(fd);
@@ -122,17 +162,28 @@ export async function addEquipment(fd: FormData) {
   if (pdf && "error" in pdf) redirect(`${ASSETS}&error=${pdf.error}`);
   if (pdf && !storageConfigured()) redirect(`${ASSETS}&error=storage`);
 
+  const imgs = await readEquipmentImages(fd, 0);
+  if ("error" in imgs) redirect(`${ASSETS}&error=${imgs.error}`);
+
   const key = pdf ? `${randomUUID()}.pdf` : null;
-  if (pdf && key) await saveFile(key, pdf.buf);
+  const saved: string[] = [];
+  if (pdf && key) { await saveFile(key, pdf.buf); saved.push(key); }
+  const client = await db().connect();
   try {
-    await db().query(
+    await client.query("BEGIN");
+    const row = await client.query<{ id: string }>(
       `INSERT INTO equipment (name, category, brand, model_serial, spare_parts, notes, manual_key, manual_filename, manual_size)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING id`,
       [f.name, category, f.brand, f.modelSerial, f.spareParts, f.notes, key, pdf?.name ?? null, pdf?.buf.length ?? null]
     );
+    await storeEquipmentImages(client, row.rows[0].id, imgs.photos, saved);
+    await client.query("COMMIT");
   } catch (err) {
-    if (key) await deleteFile(key); // don't leave an orphan file behind
+    await client.query("ROLLBACK");
+    for (const k of saved) await deleteFile(k); // don't leave orphan files behind
     throw err;
+  } finally {
+    client.release();
   }
   revalidatePath("/equipment");
   revalidatePath("/");
@@ -149,6 +200,13 @@ export async function updateEquipment(id: string, fd: FormData) {
   const existing = await db().query<{ manual_key: string | null }>("SELECT manual_key FROM equipment WHERE id = $1", [id]);
   if (!existing.rows[0]) redirect(`${ASSETS}&error=missing`);
   const oldKey = existing.rows[0].manual_key;
+
+  // Pictures: which current ones are being removed, and whether the new ones fit and are real images.
+  const current = await db().query<{ id: string; storage_key: string; thumb_key: string }>("SELECT id, storage_key, thumb_key FROM equipment_images WHERE equipment_id = $1", [id]);
+  const wanted = new Set(fd.getAll("remove_image").map(String));
+  const removing = current.rows.filter((r) => wanted.has(r.id));
+  const imgs = await readEquipmentImages(fd, current.rows.length - removing.length);
+  if ("error" in imgs) redirect(`${ASSETS}&error=${imgs.error}`);
 
   const pdf = await readPdfUpload(fd.get("manual"));
   if (pdf && "error" in pdf) redirect(`${ASSETS}&error=${pdf.error}`);
@@ -180,6 +238,26 @@ export async function updateEquipment(id: string, fd: FormData) {
   }
   // Only once the database points at the new state is the old file removed.
   if (oldKey && (newKey || removeManual)) await deleteFile(oldKey);
+
+  if (removing.length > 0 || imgs.photos.length > 0) {
+    const saved: string[] = [];
+    const client = await db().connect();
+    try {
+      await client.query("BEGIN");
+      if (removing.length > 0) {
+        await client.query("DELETE FROM equipment_images WHERE equipment_id = $1 AND id = ANY($2::uuid[])", [id, removing.map((r) => r.id)]);
+      }
+      await storeEquipmentImages(client, id, imgs.photos, saved);
+      await client.query("COMMIT");
+    } catch (err) {
+      await client.query("ROLLBACK");
+      for (const k of saved) await deleteFile(k);
+      throw err;
+    } finally {
+      client.release();
+    }
+    for (const r of removing) { await deleteFile(r.storage_key); await deleteFile(r.thumb_key); }
+  }
   revalidatePath("/equipment");
   redirect(`${ASSETS}&done=updated`);
 }

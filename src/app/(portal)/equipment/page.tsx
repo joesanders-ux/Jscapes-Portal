@@ -2,7 +2,8 @@ import Link from "next/link";
 import { db } from "@/lib/db";
 import { requireUser } from "@/lib/auth";
 import { monthlyEquipmentStatus } from "@/lib/equipment";
-import { CATEGORIES, CHECKLISTS, ITEMS, RESULT_LABEL, isCategory, isItemKey, type CategoryKey, type Result } from "@/lib/equipment-shared";
+import { CATEGORIES, CHECKLISTS, ITEMS, MAX_EQUIPMENT_IMAGES, RESULT_LABEL, isCategory, isItemKey, type CategoryKey, type Result } from "@/lib/equipment-shared";
+import { MAX_IMAGE_BYTES, MAX_UPLOAD_BYTES } from "@/lib/job-images-shared";
 import { MAX_PDF_BYTES, storageConfigured } from "@/lib/storage";
 import { CheckForm } from "./CheckForm";
 import { addEquipment, setEquipmentActive, updateEquipment, updateSpareParts } from "./actions";
@@ -15,7 +16,11 @@ const ERRORS: Record<string, string> = {
   missing: "That equipment no longer exists.",
   toobig: `That file is too big. Manuals must be ${MAX_PDF_BYTES / 1024 / 1024} MB or smaller.`,
   notpdf: "That file is not a PDF. Upload the manual as a PDF.",
-  storage: "File storage is not set up yet, so manuals cannot be uploaded. The equipment can still be added without one.",
+  storage: "File storage is not set up yet, so manuals and pictures cannot be uploaded. The equipment can still be added without them.",
+  imgmany: `An item can have up to ${MAX_EQUIPMENT_IMAGES} pictures. Remove some first, or add fewer. Nothing was saved.`,
+  imgtotal: `Those pictures are too large together (the limit is ${MAX_UPLOAD_BYTES / 1024 / 1024} MB at a time). Nothing was saved.`,
+  imgbig: `One of the pictures is too large. The limit is ${MAX_IMAGE_BYTES / 1024 / 1024} MB per picture. Nothing was saved.`,
+  imgbad: "One of the files is not a usable JPEG, PNG or WebP picture. Nothing was saved.",
 };
 const DONE: Record<string, string> = {
   checked: "Equipment check submitted. Thank you.",
@@ -263,7 +268,7 @@ async function HistoryTab({ search }: { search: Search }) {
 type Asset = {
   id: string; name: string; category: CategoryKey; brand: string; model_serial: string; spare_parts: string; notes: string;
   manual_filename: string | null; manual_size: number | null; active: boolean; last_checked: Date | null;
-  spare_parts_updated_at: Date | null; spare_parts_updated_by_name: string | null;
+  spare_parts_updated_at: Date | null; spare_parts_updated_by_name: string | null; images: { id: string; name: string }[];
 };
 
 async function AssetsTab({ isAdmin }: { isAdmin: boolean }) {
@@ -271,6 +276,8 @@ async function AssetsTab({ isAdmin }: { isAdmin: boolean }) {
   const { rows } = await db().query<Asset>(
     `SELECT e.id, e.name, e.category, e.brand, e.model_serial, e.spare_parts, e.notes, e.manual_filename, e.manual_size, e.active,
             e.spare_parts_updated_at, su.name AS spare_parts_updated_by_name,
+            (SELECT COALESCE(json_agg(json_build_object('id', im.id, 'name', im.original_filename) ORDER BY im.created_at), '[]')
+               FROM equipment_images im WHERE im.equipment_id = e.id) AS images,
             (SELECT max(c.checked_at) FROM equipment_checks c WHERE c.equipment_id = e.id) AS last_checked
        FROM equipment e
        LEFT JOIN users su ON su.id = e.spare_parts_updated_by
@@ -299,13 +306,16 @@ async function AssetsTab({ isAdmin }: { isAdmin: boolean }) {
               <input type="file" name="manual" accept="application/pdf,.pdf" className={field} />
             </label>
           </div>
+          <label className="flex flex-col gap-1 text-sm font-medium">Pictures (optional, up to {MAX_EQUIPMENT_IMAGES}, JPEG, PNG or WebP)
+            <input type="file" name="images" accept="image/jpeg,image/png,image/webp" multiple className={field} />
+          </label>
           <label className="flex flex-col gap-1 text-sm font-medium">Spare parts (optional)
             <textarea name="spare_parts" rows={2} maxLength={2000} className={field} />
           </label>
           <label className="flex flex-col gap-1 text-sm font-medium">Notes (optional)
             <textarea name="notes" rows={2} maxLength={2000} className={field} />
           </label>
-          {!storage && <p className="text-sm text-warn">File storage is not set up yet, so manuals cannot be uploaded. Set <code>FILES_DIR</code> to a mounted volume first.</p>}
+          {!storage && <p className="text-sm text-warn">File storage is not set up yet, so manuals and pictures cannot be uploaded. Set <code>FILES_DIR</code> to a mounted volume first.</p>}
           <button className={primary}>Add equipment</button>
         </form>
       )}
@@ -366,6 +376,20 @@ async function AssetsTab({ isAdmin }: { isAdmin: boolean }) {
                       <dd>{e.last_checked ? fmtDate(e.last_checked) : "No checks recorded yet"}</dd>
                     </dl>
 
+                    {e.images.length > 0 && (
+                      <ul className="mt-3 flex flex-wrap gap-3" aria-label={`Pictures of ${e.name}`}>
+                        {e.images.map((im, n) => (
+                          <li key={im.id}>
+                            <a href={`/equipment/photo/${im.id}`} target="_blank" rel="noopener noreferrer" className="block overflow-hidden rounded border border-line bg-white">
+                              {/* eslint-disable-next-line @next/next/no-img-element */}
+                              <img src={`/equipment/photo/${im.id}?size=thumb`} alt={`Picture ${n + 1} of ${e.images.length}: ${e.name}`} loading="lazy" decoding="async" className="h-28 w-36 object-cover" />
+                              <span className="sr-only">Open full size (opens in a new tab)</span>
+                            </a>
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+
                     {isAdmin && (
                       <div className="mt-3 flex flex-col gap-3">
                         <details className="rounded border border-line">
@@ -393,6 +417,25 @@ async function AssetsTab({ isAdmin }: { isAdmin: boolean }) {
                               <label className="flex min-h-11 items-center gap-2 text-sm">
                                 <input type="checkbox" name="remove_manual" className="h-5 w-5 accent-brand-text" /> Remove the current manual (ignored if you upload a new one)
                               </label>
+                            )}
+                            <label className="flex flex-col gap-1 text-sm font-medium">Add pictures ({e.images.length} of {MAX_EQUIPMENT_IMAGES} used, JPEG, PNG or WebP)
+                              <input type="file" name="images" accept="image/jpeg,image/png,image/webp" multiple className={field} />
+                            </label>
+                            {e.images.length > 0 && (
+                              <fieldset className="flex flex-col gap-2">
+                                <legend className="text-sm font-medium">Tick any picture to remove it when you save</legend>
+                                <ul className="flex flex-wrap gap-3">
+                                  {e.images.map((im, n) => (
+                                    <li key={im.id} className="flex flex-col gap-1">
+                                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                                      <img src={`/equipment/photo/${im.id}?size=thumb`} alt="" loading="lazy" decoding="async" className="h-20 w-28 rounded border border-line object-cover" />
+                                      <label className="flex min-h-11 items-center gap-2 text-sm">
+                                        <input type="checkbox" name="remove_image" value={im.id} className="h-5 w-5 accent-brand-text" /> Remove picture {n + 1}
+                                      </label>
+                                    </li>
+                                  ))}
+                                </ul>
+                              </fieldset>
                             )}
                             <button className={primary}>Save changes</button>
                           </form>
