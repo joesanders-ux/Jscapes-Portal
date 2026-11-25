@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { Logo } from "./Logo";
 import { MobileMenu } from "./MobileMenu";
-import { NotificationBell } from "./NotificationBell";
+import { NotificationMenu, type MenuNotification } from "./NotificationMenu";
 import { SideNav } from "./SideNav";
 import { signOut } from "@/app/signin/actions";
 import type { SessionUser } from "@/lib/auth";
@@ -25,7 +25,7 @@ const LINKS = [
  *  - at and above it: a fixed sidebar down the left of the page
  * The light-green focus ring keeps keyboard focus visible on the dark background.
  */
-export function Nav({ user, unread }: { user: SessionUser; unread: number }) {
+export function Nav({ user, unread, notifications }: { user: SessionUser; unread: number; notifications: MenuNotification[] }) {
   // Timesheets and Settings are for administrators only.
   const links = user.role === "admin" ? [...LINKS, { href: "/timesheets", label: "Timesheets" }, { href: "/settings/users", label: "Settings" }] : LINKS;
   const userLabel = `${user.name} (${user.role === "admin" ? "Admin" : "Staff"})`;
@@ -37,7 +37,7 @@ export function Nav({ user, unread }: { user: SessionUser; unread: number }) {
         <div className="flex items-center justify-between gap-4 px-4 py-3">
           <Link href="/" aria-label="Dashboard"><Logo height={32} /></Link>
           <div className="flex items-center gap-1">
-          <NotificationBell unread={unread} />
+          <NotificationMenu unread={unread} notifications={notifications} />
           <MobileMenu links={links} userLabel={userLabel}>
             <form action={signOut}>
               <button className="w-full rounded border border-white/60 px-3 py-2.5 font-medium hover:bg-white/10">Sign out</button>
@@ -48,10 +48,10 @@ export function Nav({ user, unread }: { user: SessionUser; unread: number }) {
       </header>
 
       {/* Large screens: sidebar. Stays in view while the page scrolls. */}
-      <aside className="hidden bg-header text-header-ink lg:sticky lg:top-0 lg:flex lg:h-screen lg:w-64 lg:shrink-0 lg:flex-col [&_:focus-visible]:outline-brand">
+      <aside className="hidden bg-header text-header-ink lg:sticky lg:top-0 lg:z-40 lg:flex lg:h-screen lg:w-64 lg:shrink-0 lg:flex-col [&_:focus-visible]:outline-brand">
         <div className="flex items-center justify-between gap-2 py-6 pl-6 pr-3">
           <Link href="/" aria-label="Dashboard" className="block"><Logo height={40} /></Link>
-          <NotificationBell unread={unread} />
+          <NotificationMenu unread={unread} notifications={notifications} />
         </div>
         <SideNav links={links} />
         <div className="border-t border-white/15 p-4">
