@@ -77,7 +77,7 @@ export async function buildTimesheetPdf(input: PdfInput): Promise<Uint8Array> {
   for (const p of sheet.people) {
     if (y < M + ROW * 2) { newPage("Totals by person (continued)"); header(); }
     const t = sum.perPerson.get(p.id)!;
-    text(fit(font, p.active ? p.name : `${p.name} (inactive)`, 9, cols[0].w - 8), cols[0].x + 4, y);
+    text(fit(font, p.name + (p.account ? "" : " (no account)") + (p.active ? "" : p.account ? " (inactive)" : " (removed)"), 9, cols[0].w - 8), cols[0].x + 4, y);
     text(String(t.daysWorked), 0, y, { right: cols[1].x + cols[1].w - 4 });
     text(fmtHours(t.hours), 0, y, { right: cols[2].x + cols[2].w - 4 });
     rule(y - 4);

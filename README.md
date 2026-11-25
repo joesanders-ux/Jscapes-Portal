@@ -56,6 +56,10 @@ Built:
   (0 to 24, quarter hours fine). Week, month and custom date-range views with Previous / Next / This week controls. The grid shows row and
   day totals; ranges over 42 days show totals only. "Export this period to PDF" downloads a payroll PDF (totals by person, then daily hours)
   for any period up to 366 days. Uses the `pdf-lib` package
+  **People without a staff account:** the "People without a staff account" box adds someone by name (migration 0018, table `timesheet_people`).
+  They get a row like everyone else (labelled "No staff account", and "(no account)" in the PDF), cannot sign in, and appear nowhere else in
+  the portal. Names that match a staff account or another timesheet person are refused. "Remove from timesheet" hides them from periods
+  where they have no hours; saved hours are never deleted, and "Add back" restores them
 - PostgreSQL migrations and a demo-data seed
 
 Not built yet: staff acknowledgement/signing of Health and Safety documents and policies,

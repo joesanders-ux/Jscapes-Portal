@@ -1,7 +1,8 @@
 import "server-only";
 import { db } from "./db";
 
-export type TimesheetPerson = { id: string; name: string; active: boolean };
+/** `account` is false for someone added to the timesheet who has no staff account (they cannot sign in). */
+export type TimesheetPerson = { id: string; name: string; active: boolean; account: boolean };
 export type Timesheet = {
   people: TimesheetPerson[];
   /** `${userId}|${day}` -> hours */
@@ -14,24 +15,34 @@ export type Timesheet = {
  */
 export async function listTimesheetPeople(from: string, to: string): Promise<TimesheetPerson[]> {
   const { rows } = await db().query<TimesheetPerson>(
-    `SELECT id, name, active FROM users
-      WHERE active OR id IN (SELECT user_id FROM timesheet_entries WHERE day BETWEEN $1::date AND $2::date)
-      ORDER BY lower(name)`,
+    `SELECT * FROM (
+     SELECT id, name, active, true AS account FROM users
+      WHERE active OR id IN (SELECT user_id FROM timesheet_entries WHERE user_id IS NOT NULL AND day BETWEEN $1::date AND $2::date)
+     UNION ALL
+     SELECT id, name, active, false AS account FROM timesheet_people
+      WHERE active OR id IN (SELECT person_id FROM timesheet_entries WHERE person_id IS NOT NULL AND day BETWEEN $1::date AND $2::date)
+     ) p ORDER BY lower(name), account DESC`,
     [from, to]
   );
+  return rows;
+}
+
+/** Every person added without a staff account, active or not, for the "manage" list on the page. */
+export async function listTimesheetOnlyPeople(): Promise<{ id: string; name: string; active: boolean }[]> {
+  const { rows } = await db().query<{ id: string; name: string; active: boolean }>("SELECT id, name, active FROM timesheet_people ORDER BY lower(name)");
   return rows;
 }
 
 export async function loadTimesheet(from: string, to: string): Promise<Timesheet> {
   const [people, entries] = await Promise.all([
     listTimesheetPeople(from, to),
-    db().query<{ user_id: string; day: string; hours: string | number }>(
-      "SELECT user_id, day, hours FROM timesheet_entries WHERE day BETWEEN $1::date AND $2::date",
+    db().query<{ owner: string; day: string; hours: string | number }>(
+      "SELECT COALESCE(user_id, person_id) AS owner, day, hours FROM timesheet_entries WHERE day BETWEEN $1::date AND $2::date",
       [from, to]
     ),
   ]);
   const hours = new Map<string, number>();
-  for (const e of entries.rows) hours.set(`${e.user_id}|${e.day}`, Number(e.hours)); // numeric arrives as text
+  for (const e of entries.rows) hours.set(`${e.owner}|${e.day}`, Number(e.hours)); // numeric arrives as text
   return { people, hours };
 }
 
