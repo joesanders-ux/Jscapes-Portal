@@ -33,7 +33,7 @@ Built:
   Van Compliance page lists any active van with no check this calendar month (UK time). Text-message reminders are not built yet
 - **Equipment Maintenance** (visible to everyone): staff submit a monthly check for an item of equipment; the checklist follows its
   category (Hand tools, Lawn mowers, Petrol equipment, or General equipment) and any "No" needs an explanation. Three tabs: Submit a check, History
-  (filter by item, category, month, needs-attention) and Equipment list (name, brand, model/serial, spare parts, manual PDF, notes). No category is chosen when adding equipment: new items get the General checklist (greased, no defects, cleaned). Items added earlier keep their original checklist.
+  (filter by item, category, month, needs-attention) and Equipment list (name, brand, model/serial, spare parts, manual PDF, notes). Anyone signed in can update an item's spare parts straight from the list (it changes nothing else, and shows who updated it and when); everything else is admin-only. No category is chosen when adding equipment: new items get the General checklist (greased, no defects, cleaned). Items added earlier keep their original checklist.
   Admins add, edit, deactivate and reactivate equipment and upload or replace manuals; staff can read the list and open manuals.
   The monthly reminder is a Dashboard banner plus a list on the check tab. Manuals need `FILES_DIR` (see Railway setup)
 - **Availability** (visible to everyone): Available / Not provided / Not available per day, up to a year ahead. Four tabs: My availability

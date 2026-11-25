@@ -99,7 +99,7 @@ export async function addEquipment(fd: FormData) {
 
 /** Edits the details. The category is fixed. A new manual replaces the old one; the box removes it. */
 export async function updateEquipment(id: string, fd: FormData) {
-  await requireAdmin();
+  const admin = await requireAdmin();
   if (!uuid(id)) redirect(`${ASSETS}&error=missing`);
   const f = readFields(fd);
   if (!f.name) redirect(`${ASSETS}&error=name`);
@@ -121,16 +121,16 @@ export async function updateEquipment(id: string, fd: FormData) {
   try {
     if (pdf && newKey) {
       await db().query(
-        `UPDATE equipment SET name=$2, brand=$3, model_serial=$4, spare_parts=$5, notes=$6, manual_key=$7, manual_filename=$8, manual_size=$9 WHERE id=$1`,
-        [id, f.name, f.brand, f.modelSerial, f.spareParts, f.notes, newKey, pdf.name, pdf.buf.length]
+        `UPDATE equipment SET name=$2, brand=$3, model_serial=$4, spare_parts=$5, notes=$6, manual_key=$7, manual_filename=$8, manual_size=$9, spare_parts_updated_at = CASE WHEN spare_parts IS DISTINCT FROM $5 THEN now() ELSE spare_parts_updated_at END, spare_parts_updated_by = CASE WHEN spare_parts IS DISTINCT FROM $5 THEN $10::uuid ELSE spare_parts_updated_by END WHERE id=$1`,
+        [id, f.name, f.brand, f.modelSerial, f.spareParts, f.notes, newKey, pdf.name, pdf.buf.length, admin.id]
       );
     } else if (removeManual) {
       await db().query(
-        `UPDATE equipment SET name=$2, brand=$3, model_serial=$4, spare_parts=$5, notes=$6, manual_key=NULL, manual_filename=NULL, manual_size=NULL WHERE id=$1`,
-        [id, f.name, f.brand, f.modelSerial, f.spareParts, f.notes]
+        `UPDATE equipment SET name=$2, brand=$3, model_serial=$4, spare_parts=$5, notes=$6, manual_key=NULL, manual_filename=NULL, manual_size=NULL, spare_parts_updated_at = CASE WHEN spare_parts IS DISTINCT FROM $5 THEN now() ELSE spare_parts_updated_at END, spare_parts_updated_by = CASE WHEN spare_parts IS DISTINCT FROM $5 THEN $7::uuid ELSE spare_parts_updated_by END WHERE id=$1`,
+        [id, f.name, f.brand, f.modelSerial, f.spareParts, f.notes, admin.id]
       );
     } else {
-      await db().query(`UPDATE equipment SET name=$2, brand=$3, model_serial=$4, spare_parts=$5, notes=$6 WHERE id=$1`, [id, f.name, f.brand, f.modelSerial, f.spareParts, f.notes]);
+      await db().query(`UPDATE equipment SET name=$2, brand=$3, model_serial=$4, spare_parts=$5, notes=$6, spare_parts_updated_at = CASE WHEN spare_parts IS DISTINCT FROM $5 THEN now() ELSE spare_parts_updated_at END, spare_parts_updated_by = CASE WHEN spare_parts IS DISTINCT FROM $5 THEN $7::uuid ELSE spare_parts_updated_by END WHERE id=$1`, [id, f.name, f.brand, f.modelSerial, f.spareParts, f.notes, admin.id]);
     }
   } catch (err) {
     if (newKey) await deleteFile(newKey);
@@ -150,4 +150,25 @@ export async function setEquipmentActive(id: string, active: boolean) {
   revalidatePath("/equipment");
   revalidatePath("/");
   redirect(`${ASSETS}&done=${active ? "restored" : "deactivated"}`);
+}
+
+/**
+ * Updates only the spare parts. Open to everyone who is signed in (staff can keep the list current),
+ * and it changes nothing else. Staff can edit active equipment; admins can also edit deactivated items.
+ */
+export async function updateSpareParts(id: string, fd: FormData) {
+  const user = await requireUser();
+  if (!uuid(id)) redirect(`${ASSETS}&error=missing`);
+  const spareParts = String(fd.get("spare_parts") ?? "").trim().slice(0, 2000);
+  const res = await db().query(
+    `UPDATE equipment
+        SET spare_parts = $2,
+            spare_parts_updated_at = CASE WHEN spare_parts IS DISTINCT FROM $2 THEN now() ELSE spare_parts_updated_at END,
+            spare_parts_updated_by = CASE WHEN spare_parts IS DISTINCT FROM $2 THEN $3::uuid ELSE spare_parts_updated_by END
+      WHERE id = $1 AND (active OR $4::boolean)`,
+    [id, spareParts, user.id, user.role === "admin"]
+  );
+  if (!res.rowCount) redirect(`${ASSETS}&error=missing`);
+  revalidatePath("/equipment");
+  redirect(`${ASSETS}&done=spare`);
 }

@@ -5,7 +5,7 @@ import { monthlyEquipmentStatus } from "@/lib/equipment";
 import { CATEGORIES, ITEMS, RESULT_LABEL, isCategory, isItemKey, type CategoryKey, type Result } from "@/lib/equipment-shared";
 import { MAX_PDF_BYTES, storageConfigured } from "@/lib/storage";
 import { CheckForm } from "./CheckForm";
-import { addEquipment, setEquipmentActive, updateEquipment } from "./actions";
+import { addEquipment, setEquipmentActive, updateEquipment, updateSpareParts } from "./actions";
 
 type Search = { tab?: string; equipment?: string; category?: string; month?: string; issues?: string; error?: string; done?: string };
 
@@ -23,6 +23,7 @@ const DONE: Record<string, string> = {
   updated: "Equipment details saved.",
   deactivated: "Equipment deactivated. It is hidden from the check form and reminders, and its past checks are kept.",
   restored: "Equipment restored to the active list.",
+  spare: "Spare parts saved.",
 };
 
 const uuid = (s: unknown): s is string => typeof s === "string" && /^[0-9a-f-]{36}$/i.test(s);
@@ -232,14 +233,17 @@ async function HistoryTab({ search }: { search: Search }) {
 type Asset = {
   id: string; name: string; category: CategoryKey; brand: string; model_serial: string; spare_parts: string; notes: string;
   manual_filename: string | null; manual_size: number | null; active: boolean; last_checked: Date | null;
+  spare_parts_updated_at: Date | null; spare_parts_updated_by_name: string | null;
 };
 
 async function AssetsTab({ isAdmin }: { isAdmin: boolean }) {
   // Staff see the active equipment. Admins also see deactivated items so they can restore them.
   const { rows } = await db().query<Asset>(
     `SELECT e.id, e.name, e.category, e.brand, e.model_serial, e.spare_parts, e.notes, e.manual_filename, e.manual_size, e.active,
+            e.spare_parts_updated_at, su.name AS spare_parts_updated_by_name,
             (SELECT max(c.checked_at) FROM equipment_checks c WHERE c.equipment_id = e.id) AS last_checked
        FROM equipment e
+       LEFT JOIN users su ON su.id = e.spare_parts_updated_by
       WHERE e.active OR $1::boolean
       ORDER BY e.active DESC, lower(e.name)`,
     [isAdmin]
@@ -300,7 +304,26 @@ async function AssetsTab({ isAdmin }: { isAdmin: boolean }) {
                       <dt className="text-ink-muted">Model / serial number</dt>
                       <dd>{e.model_serial || "Not recorded"}</dd>
                       <dt className="text-ink-muted">Spare parts</dt>
-                      <dd className="whitespace-pre-line">{e.spare_parts || "Not recorded"}</dd>
+                      <dd>
+                        <span className="whitespace-pre-line">{e.spare_parts || "Not recorded"}</span>
+                        {e.spare_parts_updated_at && (
+                          <span className="block text-xs text-ink-muted">
+                            Updated {fmtDate(e.spare_parts_updated_at)}{e.spare_parts_updated_by_name ? ` by ${e.spare_parts_updated_by_name}` : ""}
+                          </span>
+                        )}
+                        {/* Anyone signed in can keep the spare parts up to date; it changes nothing else. */}
+                        {(e.active || isAdmin) && (
+                          <details className="mt-1">
+                            <summary className="cursor-pointer text-brand-text underline">Edit spare parts<span className="sr-only"> for {e.name}</span></summary>
+                            <form action={updateSpareParts.bind(null, e.id)} className="mt-2 flex flex-col gap-2">
+                              <label className="flex flex-col gap-1 font-medium">Spare parts for {e.name}
+                                <textarea name="spare_parts" rows={3} maxLength={2000} defaultValue={e.spare_parts} className={field} />
+                              </label>
+                              <button className={`${primary} text-sm`}>Save spare parts</button>
+                            </form>
+                          </details>
+                        )}
+                      </dd>
                       <dt className="text-ink-muted">Manual</dt>
                       <dd>
                         {e.manual_filename
