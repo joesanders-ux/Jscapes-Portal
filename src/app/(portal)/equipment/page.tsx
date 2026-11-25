@@ -170,8 +170,11 @@ async function HistoryTab({ search }: { search: Search }) {
           <input type="checkbox" name="issues" value="1" defaultChecked={issuesOnly} className="h-5 w-5 accent-brand-text" />
           Needs attention only
         </label>
-        <button className={primary}>Filter</button>
-        <Link href="/equipment?tab=history" className={`${small} self-center`}>Clear</Link>
+        {/* Same size, same height as the fields, and lined up with them along the bottom. */}
+        <div className="flex gap-2 self-end">
+          <button className="inline-flex min-w-24 items-center justify-center rounded border border-brand bg-brand px-5 py-2 font-medium text-brand-ink hover:bg-brand-dark">Filter</button>
+          <Link href="/equipment?tab=history" className="inline-flex min-w-24 items-center justify-center rounded border border-line bg-white px-5 py-2 font-medium hover:bg-brand-soft">Clear</Link>
+        </div>
       </form>
 
       <p className="text-sm text-ink-muted" role="status">
