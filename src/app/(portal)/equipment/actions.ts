@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { db } from "@/lib/db";
 import { requireAdmin, requireUser } from "@/lib/auth";
-import { CATEGORIES, ITEMS, isCategory, isOptionalItem, type Result } from "@/lib/equipment-shared";
+import { CATEGORIES, ITEMS, isChecklist, isOptionalItem, type Result } from "@/lib/equipment-shared";
 import { deleteFile, readPdfUpload, saveFile, storageConfigured } from "@/lib/storage";
 
 export type CheckState = { error?: string };
@@ -12,36 +12,44 @@ export type CheckState = { error?: string };
 const uuid = (s: string) => /^[0-9a-f-]{36}$/i.test(s);
 const ASSETS = "/equipment?tab=assets";
 
-/** Any signed-in user can submit a check. Every rule is re-checked here, whatever the browser did. */
+/**
+ * Any signed-in user can submit a check. Every rule is re-checked here, whatever the browser did.
+ * The person chooses the checklist on the form (Hand tools, Lawn mowers or Petrol equipment) and ticks
+ * what was done. A ticked box is "yes". An unticked box is "no" (needs attention), except Sharpening
+ * (if required), which is "not required" when unticked. Anything not ticked needs an explanation in Notes.
+ */
 export async function submitEquipmentCheck(_prev: CheckState, fd: FormData): Promise<CheckState> {
   const user = await requireUser();
 
   const equipmentId = String(fd.get("equipment") ?? "");
   if (!uuid(equipmentId)) return { error: "Choose the equipment you checked." };
-  const found = await db().query<{ category: string }>("SELECT category FROM equipment WHERE id = $1 AND active", [equipmentId]);
-  const category = found.rows[0]?.category;
-  if (!isCategory(category)) return { error: "That equipment is not on the active list. Pick another." };
+  const found = await db().query("SELECT 1 FROM equipment WHERE id = $1 AND active", [equipmentId]);
+  if (!found.rows[0]) return { error: "That equipment is not on the active list. Pick another." };
 
-  // The checklist comes from the equipment's category on the server, not from what the browser sent.
-  const answers: { key: string; result: Result; note: string }[] = [];
-  for (const key of CATEGORIES[category].items) {
-    const label = ITEMS[key].label;
-    const raw = fd.get(key);
-    const allowed = isOptionalItem(key) ? ["yes", "no", "na"] : ["yes", "no"];
-    if (typeof raw !== "string" || !allowed.includes(raw)) return { error: `Answer "${label}".` };
-    const result = raw as Result;
-    const note = result === "no" ? String(fd.get(`${key}_note`) ?? "").trim().slice(0, 500) : "";
-    if (result === "no" && !note) return { error: `Explain why for "${label}".` };
-    answers.push({ key, result, note });
-  }
+  const checklist = fd.get("checklist");
+  if (!isChecklist(checklist)) return { error: "Choose Hand tools, Lawn mowers or Petrol equipment." };
+
   const notes = String(fd.get("notes") ?? "").trim().slice(0, 2000);
+
+  // The checklist comes from the server's own list, not from what the browser sent.
+  const answers: { key: string; result: Result; note: string }[] = [];
+  const missed: string[] = [];
+  for (const key of CATEGORIES[checklist].items) {
+    const ticked = fd.get(key) === "on";
+    const result: Result = ticked ? "yes" : isOptionalItem(key) ? "na" : "no";
+    if (result === "no") missed.push(ITEMS[key].label);
+    answers.push({ key, result, note: result === "no" ? notes.slice(0, 500) : "" });
+  }
+  if (missed.length > 0 && !notes) {
+    return { error: `Not ticked: ${missed.join(", ")}. Tick ${missed.length === 1 ? "it" : "them"}, or explain in Notes why not.` };
+  }
 
   const client = await db().connect();
   try {
     await client.query("BEGIN");
     const check = await client.query<{ id: string }>(
-      "INSERT INTO equipment_checks (equipment_id, checked_by, notes) VALUES ($1, $2, $3) RETURNING id",
-      [equipmentId, user.id, notes]
+      "INSERT INTO equipment_checks (equipment_id, checked_by, notes, checklist) VALUES ($1, $2, $3, $4) RETURNING id",
+      [equipmentId, user.id, notes, checklist]
     );
     for (const a of answers) {
       await client.query("INSERT INTO equipment_check_items (check_id, item_key, result, note) VALUES ($1, $2, $3, $4)", [check.rows[0].id, a.key, a.result, a.note]);

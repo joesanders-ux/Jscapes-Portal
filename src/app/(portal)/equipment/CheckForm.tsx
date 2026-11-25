@@ -2,13 +2,11 @@
 import { useState } from "react";
 import { useFormState, useFormStatus } from "react-dom";
 import { submitEquipmentCheck, type CheckState } from "./actions";
-import { CATEGORIES, ITEMS, isOptionalItem, RESULT_LABEL, type CategoryKey, type Result } from "@/lib/equipment-shared";
+import { CATEGORIES, ITEMS, isOptionalItem, type ChecklistKey } from "@/lib/equipment-shared";
 
-export type EquipmentOption = { id: string; label: string; category: CategoryKey };
+export type EquipmentOption = { id: string; label: string };
 
 const field = "rounded border border-line bg-white px-3 py-2 font-normal";
-const pill =
-  "flex min-h-11 cursor-pointer items-center gap-2 rounded border border-line bg-white px-4 py-2 has-[:checked]:border-brand-text has-[:checked]:bg-brand-soft";
 
 function Submit() {
   const { pending } = useFormStatus();
@@ -20,85 +18,51 @@ function Submit() {
 }
 
 /**
- * The check form. Choosing the equipment shows that category's checklist, and a "why" box appears
- * for any item answered No. The server works out the checklist again from the equipment and checks
- * every rule, so this is convenience, not security.
+ * One checklist (Hand tools, Lawn mowers or Petrol equipment): choose the equipment, tick what was done,
+ * add notes. The server works out the checklist again and checks every rule, so this is convenience,
+ * not security.
  */
-export function CheckForm({ equipment, defaultEquipment }: { equipment: EquipmentOption[]; defaultEquipment?: string }) {
+export function CheckForm({ checklist, equipment, defaultEquipment }: { checklist: ChecklistKey; equipment: EquipmentOption[]; defaultEquipment?: string }) {
   const [state, action] = useFormState<CheckState, FormData>(submitEquipmentCheck, {});
-  const [selected, setSelected] = useState(defaultEquipment ?? "");
-  const [answers, setAnswers] = useState<Record<string, Result>>({});
-  const category = equipment.find((e) => e.id === selected)?.category;
-
-  const groups = (Object.keys(CATEGORIES) as CategoryKey[])
-    .map((key) => ({ key, label: CATEGORIES[key].label, items: equipment.filter((e) => e.category === key) }))
-    .filter((g) => g.items.length > 0);
+  const items = CATEGORIES[checklist].items;
+  const [ticked, setTicked] = useState<Record<string, boolean>>({});
+  // Anything that is not ticked (other than "if required" items) needs a reason in Notes.
+  const needsNotes = items.some((key) => !ticked[key] && !isOptionalItem(key));
 
   return (
-    <form action={action} className="flex flex-col gap-5">
+    <form action={action} className="flex flex-col gap-4">
+      <input type="hidden" name="checklist" value={checklist} />
+
       <label className="flex flex-col gap-1 text-sm font-medium">Equipment
-        <select
-          name="equipment"
-          required
-          value={selected}
-          onChange={(e) => { setSelected(e.target.value); setAnswers({}); }}
-          className={field}
-        >
+        <select name="equipment" required defaultValue={defaultEquipment ?? ""} className={field}>
           <option value="" disabled>Choose equipment</option>
-          {groups.map((g) => (
-            <optgroup key={g.key} label={g.label}>
-              {g.items.map((e) => <option key={e.id} value={e.id}>{e.label}</option>)}
-            </optgroup>
-          ))}
+          {equipment.map((e) => <option key={e.id} value={e.id}>{e.label}</option>)}
         </select>
       </label>
 
-      {!category && <p className="text-sm text-ink-muted">Choose the equipment to see its checklist.</p>}
-
-      {category && (
-        // Keyed on the equipment so switching item never carries answers over from another checklist.
-        <div key={selected} className="flex flex-col gap-5">
-          {CATEGORIES[category].items.map((key) => {
-            const options: Result[] = isOptionalItem(key) ? ["yes", "no", "na"] : ["yes", "no"];
-            return (
-              <div key={key} className="rounded-lg border border-line bg-surface-raised p-4">
-                <fieldset>
-                  <legend className="mb-2 font-semibold">{ITEMS[key].label}</legend>
-                  <div className="flex flex-wrap gap-3">
-                    {options.map((v) => (
-                      <label key={v} className={pill}>
-                        <input
-                          type="radio"
-                          name={key}
-                          value={v}
-                          required
-                          checked={answers[key] === v}
-                          onChange={() => setAnswers((a) => ({ ...a, [key]: v }))}
-                          className="h-5 w-5 accent-brand-text"
-                        />
-                        {RESULT_LABEL[v]}
-                      </label>
-                    ))}
-                  </div>
-                </fieldset>
-                {answers[key] === "no" && (
-                  <label className="mt-3 flex flex-col gap-1 text-sm font-medium">
-                    Why? Explain what is wrong (required)
-                    <textarea name={`${key}_note`} required rows={2} maxLength={500} className={field} />
-                  </label>
-                )}
-              </div>
-            );
-          })}
-
-          <label className="flex flex-col gap-1 text-sm font-medium">Notes (optional)
-            <textarea name="notes" rows={3} maxLength={2000} className={field} />
+      <fieldset className="flex flex-col gap-2">
+        <legend className="mb-1 text-sm font-medium">Tick each check you have done</legend>
+        {items.map((key) => (
+          <label key={key} className="flex min-h-11 cursor-pointer items-center gap-3 rounded border border-line bg-white px-4 py-2 has-[:checked]:border-brand-text has-[:checked]:bg-brand-soft">
+            <input
+              type="checkbox"
+              name={key}
+              checked={ticked[key] === true}
+              onChange={(e) => setTicked((t) => ({ ...t, [key]: e.target.checked }))}
+              className="h-6 w-6 shrink-0 accent-brand-text"
+            />
+            <span>{ITEMS[key].label}</span>
           </label>
-        </div>
-      )}
+        ))}
+      </fieldset>
+
+      <label className="flex flex-col gap-1 text-sm font-medium">
+        Notes{needsNotes ? " (required: explain anything not ticked)" : " (optional)"}
+        <textarea name="notes" rows={3} maxLength={2000} required={needsNotes} className={field} />
+      </label>
 
       {state.error && <p role="alert" className="rounded border border-danger bg-white p-3 text-sm text-danger">{state.error}</p>}
-      {category && <Submit />}
+      <Submit />
     </form>
   );
 }

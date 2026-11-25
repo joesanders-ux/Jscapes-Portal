@@ -2,7 +2,7 @@ import Link from "next/link";
 import { db } from "@/lib/db";
 import { requireUser } from "@/lib/auth";
 import { monthlyEquipmentStatus } from "@/lib/equipment";
-import { CATEGORIES, ITEMS, RESULT_LABEL, isCategory, isItemKey, type CategoryKey, type Result } from "@/lib/equipment-shared";
+import { CATEGORIES, CHECKLISTS, ITEMS, RESULT_LABEL, isCategory, isItemKey, type CategoryKey, type Result } from "@/lib/equipment-shared";
 import { MAX_PDF_BYTES, storageConfigured } from "@/lib/storage";
 import { CheckForm } from "./CheckForm";
 import { addEquipment, setEquipmentActive, updateEquipment, updateSpareParts } from "./actions";
@@ -81,6 +81,7 @@ export default async function EquipmentPage({ searchParams }: { searchParams: Se
 async function CheckTab({ isAdmin, preselect }: { isAdmin: boolean; preselect?: string }) {
   const { items, due, monthLabel } = await monthlyEquipmentStatus();
   const defaultEquipment = uuid(preselect) && items.some((e) => e.id === preselect) ? preselect : undefined;
+  const preselectedItem = items.find((e) => e.id === defaultEquipment);
 
   return (
     <>
@@ -96,7 +97,7 @@ async function CheckTab({ isAdmin, preselect }: { isAdmin: boolean; preselect?: 
             {due.map((e) => (
               <li key={e.id} className="flex flex-wrap items-center gap-x-3 text-sm">
                 <span className="font-medium">{equipmentLabel(e)}</span>
-                <span className="text-ink-muted">{CATEGORIES[e.category].label}</span>
+                {e.category !== "general" && <span className="text-ink-muted">{CATEGORIES[e.category].label}</span>}
                 <Link href={`/equipment?equipment=${e.id}`} className="text-brand-text underline">Check this item<span className="sr-only">: {e.name}</span></Link>
               </li>
             ))}
@@ -108,12 +109,24 @@ async function CheckTab({ isAdmin, preselect }: { isAdmin: boolean; preselect?: 
         </p>
       )}
 
-      {items.length > 0 && (
-        <section aria-labelledby="new-check" className="flex flex-col gap-3">
-          <h2 id="new-check" className="text-xl font-semibold">New equipment check</h2>
-          <CheckForm equipment={items.map((e) => ({ id: e.id, label: equipmentLabel(e), category: e.category }))} defaultEquipment={defaultEquipment} />
-        </section>
-      )}
+      {/* Always shown: pick a checklist, then choose the equipment, tick what was done and add notes. */}
+      <section aria-labelledby="new-check" className="flex flex-col gap-3">
+        <h2 id="new-check" className="text-xl font-semibold">Submit a check</h2>
+        {items.length === 0 && <p className="text-sm text-ink-muted">There is no equipment to check yet.</p>}
+        {CHECKLISTS.map((key) => (
+          // Opened automatically when someone arrives from a "Check this item" link for equipment of this type.
+          <details key={key} open={preselectedItem?.category === key} className="rounded-lg border border-line bg-surface-raised">
+            <summary className="cursor-pointer p-4 text-lg font-semibold">{CATEGORIES[key].label}</summary>
+            <div className="border-t border-line p-4">
+              <CheckForm
+                checklist={key}
+                equipment={items.map((e) => ({ id: e.id, label: equipmentLabel(e) }))}
+                defaultEquipment={preselectedItem?.category === key ? defaultEquipment : undefined}
+              />
+            </div>
+          </details>
+        ))}
+      </section>
     </>
   );
 }
@@ -132,7 +145,7 @@ async function HistoryTab({ search }: { search: Search }) {
   const [listRes, checksRes] = await Promise.all([
     db().query<{ id: string; name: string; brand: string; model_serial: string }>("SELECT id, name, brand, model_serial FROM equipment ORDER BY lower(name)"),
     db().query<CheckRow>(
-      `SELECT c.id, c.checked_at, c.notes, e.name, e.brand, e.model_serial, e.category, u.name AS checked_by,
+      `SELECT c.id, c.checked_at, c.notes, e.name, e.brand, e.model_serial, COALESCE(c.checklist, e.category) AS category, u.name AS checked_by,
               COALESCE(bool_or(i.result = 'no'), false) AS flagged,
               COALESCE(json_agg(json_build_object('key', i.item_key, 'result', i.result, 'note', i.note)) FILTER (WHERE i.item_key IS NOT NULL), '[]') AS items
          FROM equipment_checks c
@@ -140,7 +153,7 @@ async function HistoryTab({ search }: { search: Search }) {
          LEFT JOIN users u ON u.id = c.checked_by
          LEFT JOIN equipment_check_items i ON i.check_id = c.id
         WHERE ($1::uuid IS NULL OR c.equipment_id = $1)
-          AND ($2::text IS NULL OR e.category = $2)
+          AND ($2::text IS NULL OR COALESCE(c.checklist, e.category) = $2)
           AND ($3::date IS NULL OR ((c.checked_at AT TIME ZONE 'Europe/London') >= $3::date
                                 AND (c.checked_at AT TIME ZONE 'Europe/London') <  $3::date + interval '1 month'))
         GROUP BY c.id, e.id, u.id
@@ -162,10 +175,10 @@ async function HistoryTab({ search }: { search: Search }) {
             {listRes.rows.map((e) => <option key={e.id} value={e.id}>{equipmentLabel(e)}</option>)}
           </select>
         </label>
-        <label className="flex flex-col gap-1 text-sm font-medium">Category
+        <label className="flex flex-col gap-1 text-sm font-medium">Checklist
           <select name="category" defaultValue={categoryFilter ?? ""} className={field}>
-            <option value="">All categories</option>
-            {(Object.keys(CATEGORIES) as CategoryKey[]).map((k) => <option key={k} value={k}>{CATEGORIES[k].label}</option>)}
+            <option value="">All checklists</option>
+            {CHECKLISTS.map((k) => <option key={k} value={k}>{CATEGORIES[k].label}</option>)}
           </select>
         </label>
         <label className="flex flex-col gap-1 text-sm font-medium">Month
@@ -213,7 +226,7 @@ async function HistoryTab({ search }: { search: Search }) {
                           <span aria-hidden="true" className={a.result === "yes" ? "text-brand-text" : a.result === "no" ? "font-bold text-danger" : "text-ink-muted"}>{mark}</span>
                           <span>
                             <span className={a.result === "no" ? "font-semibold text-danger" : ""}>{ITEMS[key].label}: {RESULT_LABEL[a.result]}</span>
-                            {a.result === "no" && a.note && <span>. {a.note}</span>}
+                            {a.result === "no" && a.note && a.note !== c.notes.slice(0, 500) && <span>. {a.note}</span>}
                           </span>
                         </li>
                       );
