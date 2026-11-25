@@ -63,6 +63,7 @@ export async function submitEquipmentCheck(_prev: CheckState, fd: FormData): Pro
 function readFields(fd: FormData) {
   return {
     name: String(fd.get("name") ?? "").trim().slice(0, 120),
+    brand: String(fd.get("brand") ?? "").trim().slice(0, 100),
     modelSerial: String(fd.get("model_serial") ?? "").trim().slice(0, 200),
     spareParts: String(fd.get("spare_parts") ?? "").trim().slice(0, 2000),
     notes: String(fd.get("notes") ?? "").trim().slice(0, 2000),
@@ -83,9 +84,9 @@ export async function addEquipment(fd: FormData) {
   if (pdf && key) await saveFile(key, pdf.buf);
   try {
     await db().query(
-      `INSERT INTO equipment (name, category, model_serial, spare_parts, notes, manual_key, manual_filename, manual_size)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
-      [f.name, category, f.modelSerial, f.spareParts, f.notes, key, pdf?.name ?? null, pdf?.buf.length ?? null]
+      `INSERT INTO equipment (name, category, brand, model_serial, spare_parts, notes, manual_key, manual_filename, manual_size)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
+      [f.name, category, f.brand, f.modelSerial, f.spareParts, f.notes, key, pdf?.name ?? null, pdf?.buf.length ?? null]
     );
   } catch (err) {
     if (key) await deleteFile(key); // don't leave an orphan file behind
@@ -120,16 +121,16 @@ export async function updateEquipment(id: string, fd: FormData) {
   try {
     if (pdf && newKey) {
       await db().query(
-        `UPDATE equipment SET name=$2, model_serial=$3, spare_parts=$4, notes=$5, manual_key=$6, manual_filename=$7, manual_size=$8 WHERE id=$1`,
-        [id, f.name, f.modelSerial, f.spareParts, f.notes, newKey, pdf.name, pdf.buf.length]
+        `UPDATE equipment SET name=$2, brand=$3, model_serial=$4, spare_parts=$5, notes=$6, manual_key=$7, manual_filename=$8, manual_size=$9 WHERE id=$1`,
+        [id, f.name, f.brand, f.modelSerial, f.spareParts, f.notes, newKey, pdf.name, pdf.buf.length]
       );
     } else if (removeManual) {
       await db().query(
-        `UPDATE equipment SET name=$2, model_serial=$3, spare_parts=$4, notes=$5, manual_key=NULL, manual_filename=NULL, manual_size=NULL WHERE id=$1`,
-        [id, f.name, f.modelSerial, f.spareParts, f.notes]
+        `UPDATE equipment SET name=$2, brand=$3, model_serial=$4, spare_parts=$5, notes=$6, manual_key=NULL, manual_filename=NULL, manual_size=NULL WHERE id=$1`,
+        [id, f.name, f.brand, f.modelSerial, f.spareParts, f.notes]
       );
     } else {
-      await db().query(`UPDATE equipment SET name=$2, model_serial=$3, spare_parts=$4, notes=$5 WHERE id=$1`, [id, f.name, f.modelSerial, f.spareParts, f.notes]);
+      await db().query(`UPDATE equipment SET name=$2, brand=$3, model_serial=$4, spare_parts=$5, notes=$6 WHERE id=$1`, [id, f.name, f.brand, f.modelSerial, f.spareParts, f.notes]);
     }
   } catch (err) {
     if (newKey) await deleteFile(newKey);

@@ -31,7 +31,11 @@ const fmtDate = (d: Date) => new Intl.DateTimeFormat("en-GB", { dateStyle: "medi
 const field = "rounded border border-line bg-white px-3 py-2 font-normal";
 const primary = "self-start rounded bg-brand px-4 py-2 font-medium text-brand-ink hover:bg-brand-dark";
 const small = "rounded border border-line px-3 py-1.5 text-sm hover:bg-brand-soft";
-const equipmentLabel = (e: { name: string; model_serial: string }) => (e.model_serial ? `${e.name} (${e.model_serial})` : e.name);
+/** "Hedge cutter (Stihl, HS 45)": brand and model/serial in brackets when they have been recorded. */
+const equipmentLabel = (e: { name: string; brand?: string; model_serial: string }) => {
+  const extra = [e.brand, e.model_serial].filter(Boolean).join(", ");
+  return extra ? `${e.name} (${extra})` : e.name;
+};
 
 const TABS = [
   { id: "check", label: "Submit a check" },
@@ -114,7 +118,7 @@ async function CheckTab({ isAdmin, preselect }: { isAdmin: boolean; preselect?: 
 }
 
 type CheckRow = {
-  id: string; checked_at: Date; name: string; model_serial: string; category: CategoryKey; checked_by: string | null; notes: string; flagged: boolean;
+  id: string; checked_at: Date; name: string; brand: string; model_serial: string; category: CategoryKey; checked_by: string | null; notes: string; flagged: boolean;
   items: { key: string; result: Result; note: string }[];
 };
 
@@ -125,9 +129,9 @@ async function HistoryTab({ search }: { search: Search }) {
   const issuesOnly = search.issues === "1";
 
   const [listRes, checksRes] = await Promise.all([
-    db().query<{ id: string; name: string; model_serial: string }>("SELECT id, name, model_serial FROM equipment ORDER BY lower(name)"),
+    db().query<{ id: string; name: string; brand: string; model_serial: string }>("SELECT id, name, brand, model_serial FROM equipment ORDER BY lower(name)"),
     db().query<CheckRow>(
-      `SELECT c.id, c.checked_at, c.notes, e.name, e.model_serial, e.category, u.name AS checked_by,
+      `SELECT c.id, c.checked_at, c.notes, e.name, e.brand, e.model_serial, e.category, u.name AS checked_by,
               COALESCE(bool_or(i.result = 'no'), false) AS flagged,
               COALESCE(json_agg(json_build_object('key', i.item_key, 'result', i.result, 'note', i.note)) FILTER (WHERE i.item_key IS NOT NULL), '[]') AS items
          FROM equipment_checks c
@@ -226,14 +230,14 @@ async function HistoryTab({ search }: { search: Search }) {
 }
 
 type Asset = {
-  id: string; name: string; category: CategoryKey; model_serial: string; spare_parts: string; notes: string;
+  id: string; name: string; category: CategoryKey; brand: string; model_serial: string; spare_parts: string; notes: string;
   manual_filename: string | null; manual_size: number | null; active: boolean; last_checked: Date | null;
 };
 
 async function AssetsTab({ isAdmin }: { isAdmin: boolean }) {
   // Staff see the active equipment. Admins also see deactivated items so they can restore them.
   const { rows } = await db().query<Asset>(
-    `SELECT e.id, e.name, e.category, e.model_serial, e.spare_parts, e.notes, e.manual_filename, e.manual_size, e.active,
+    `SELECT e.id, e.name, e.category, e.brand, e.model_serial, e.spare_parts, e.notes, e.manual_filename, e.manual_size, e.active,
             (SELECT max(c.checked_at) FROM equipment_checks c WHERE c.equipment_id = e.id) AS last_checked
        FROM equipment e
       WHERE e.active OR $1::boolean
@@ -250,6 +254,9 @@ async function AssetsTab({ isAdmin }: { isAdmin: boolean }) {
           <div className="grid gap-3 sm:grid-cols-2">
             <label className="flex flex-col gap-1 text-sm font-medium">Equipment name
               <input name="name" required maxLength={120} className={field} />
+            </label>
+            <label className="flex flex-col gap-1 text-sm font-medium">Brand (optional)
+              <input name="brand" maxLength={100} className={field} />
             </label>
             <label className="flex flex-col gap-1 text-sm font-medium">Model / serial number
               <input name="model_serial" maxLength={200} className={field} />
@@ -288,6 +295,8 @@ async function AssetsTab({ isAdmin }: { isAdmin: boolean }) {
                       {!e.active && <span className="rounded border border-line px-2 py-0.5 text-xs font-semibold text-ink-muted">Deactivated</span>}
                     </div>
                     <dl className="mt-2 grid gap-x-6 gap-y-1 text-sm sm:grid-cols-[10rem_1fr]">
+                      <dt className="text-ink-muted">Brand</dt>
+                      <dd>{e.brand || "Not recorded"}</dd>
                       <dt className="text-ink-muted">Model / serial number</dt>
                       <dd>{e.model_serial || "Not recorded"}</dd>
                       <dt className="text-ink-muted">Spare parts</dt>
@@ -311,6 +320,9 @@ async function AssetsTab({ isAdmin }: { isAdmin: boolean }) {
                           <form action={updateEquipment.bind(null, e.id)} className="flex flex-col gap-3 border-t border-line p-3">
                             <label className="flex flex-col gap-1 text-sm font-medium">Equipment name
                               <input name="name" required maxLength={120} defaultValue={e.name} className={field} />
+                            </label>
+                            <label className="flex flex-col gap-1 text-sm font-medium">Brand
+                              <input name="brand" maxLength={100} defaultValue={e.brand} className={field} />
                             </label>
                             <label className="flex flex-col gap-1 text-sm font-medium">Model / serial number
                               <input name="model_serial" maxLength={200} defaultValue={e.model_serial} className={field} />

@@ -2,7 +2,7 @@ import "server-only";
 import { db } from "./db";
 import type { CategoryKey } from "./equipment-shared";
 
-export type EquipmentStatus = { id: string; name: string; category: CategoryKey; model_serial: string; checked: boolean };
+export type EquipmentStatus = { id: string; name: string; category: CategoryKey; brand: string; model_serial: string; checked: boolean };
 
 /**
  * Every active item of equipment and whether it has had a check this calendar month (UK time).
@@ -10,7 +10,7 @@ export type EquipmentStatus = { id: string; name: string; category: CategoryKey;
  */
 export async function monthlyEquipmentStatus(): Promise<{ items: EquipmentStatus[]; due: EquipmentStatus[]; monthLabel: string }> {
   const { rows } = await db().query<EquipmentStatus>(
-    `SELECT e.id, e.name, e.category, e.model_serial,
+    `SELECT e.id, e.name, e.category, e.brand, e.model_serial,
             EXISTS (
               SELECT 1 FROM equipment_checks c
                WHERE c.equipment_id = e.id
