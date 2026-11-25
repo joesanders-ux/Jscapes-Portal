@@ -54,7 +54,7 @@ Built:
   Text-message notifications are not built yet
 - **Timesheets** (administrators only; staff get "not found", on the page and the PDF link): hours per person per day, entered as numbers
   (0 to 24, quarter hours fine). Week, month and custom date-range views with Previous / Next / This week controls. The grid shows row and
-  day totals; ranges over 42 days show totals only. "Export this period to PDF" downloads a payroll PDF (totals by person, then daily hours)
+  day totals; ranges over 42 days show totals only. "Export this period to PDF" downloads a payroll PDF with the Jscapes logo (`public/logo.png`) top right, dates as dd/mm/yyyy, the confidential note bottom left, totals by person, a full day-by-day breakdown for each person, then the daily grid
   for any period up to 366 days. Uses the `pdf-lib` package
   **People without a staff account:** the "People without a staff account" box adds someone by name (migration 0018, table `timesheet_people`).
   They get a row like everyone else (labelled "No staff account", and "(no account)" in the PDF), cannot sign in, and appear nowhere else in

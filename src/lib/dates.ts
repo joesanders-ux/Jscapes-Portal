@@ -49,3 +49,6 @@ export const fmtShort = fmt({ weekday: "short", day: "numeric", month: "short" }
 export const fmtMonth = fmt({ month: "long", year: "numeric" });
 export const fmtDayNum = fmt({ day: "numeric" });
 export const fmtWeekday = fmt({ weekday: "short" });
+
+/** 25/11/2026 style, for printed documents (the PDF exports). */
+export const fmtDmy = (ymd: string) => `${ymd.slice(8, 10)}/${ymd.slice(5, 7)}/${ymd.slice(0, 4)}`;

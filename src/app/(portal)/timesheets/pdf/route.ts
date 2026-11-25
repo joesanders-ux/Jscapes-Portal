@@ -1,5 +1,5 @@
 import { getSessionUser } from "@/lib/auth";
-import { fmtShort, isYmd } from "@/lib/dates";
+import { fmtDmy, isYmd } from "@/lib/dates";
 import { buildTimesheetPdf } from "@/lib/timesheet-pdf";
 import { loadTimesheet } from "@/lib/timesheets";
 import { MAX_SPAN_DAYS, listDays } from "@/lib/timesheets-shared";
@@ -19,10 +19,12 @@ export async function GET(req: Request) {
   if (listDays(from, to).length > MAX_SPAN_DAYS) return new Response(`Choose a period of up to ${MAX_SPAN_DAYS} days.`, { status: 400 });
 
   const sheet = await loadTimesheet(from, to);
-  const generatedAt = new Intl.DateTimeFormat("en-GB", { dateStyle: "medium", timeStyle: "short", timeZone: "Europe/London" }).format(new Date());
+  // 25/11/2026 21:45, London time
+  const generatedAt = new Intl.DateTimeFormat("en-GB", { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit", hour12: false, timeZone: "Europe/London" })
+    .format(new Date()).replace(", ", " ");
   const bytes = await buildTimesheetPdf({
     sheet, from, to, generatedBy: user.name, generatedAt,
-    title: from === to ? fmtShort(from) : `${from} to ${to}`,
+    title: from === to ? fmtDmy(from) : `${fmtDmy(from)} to ${fmtDmy(to)}`,
   });
   // A copy typed as a plain ArrayBuffer-backed Uint8Array, which is what Response accepts as a body.
   return new Response(new Uint8Array(bytes), {
