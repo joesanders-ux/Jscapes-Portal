@@ -15,12 +15,14 @@ export async function createPost(formData: FormData) {
   const title = text(formData, "title", 120);
   const body = text(formData, "body", 2000);
   if (!title) return;
-  await db().query("INSERT INTO bulletin_posts (title, body, pinned, author_id) VALUES ($1,$2,$3,$4)", [
-    title,
-    body,
-    formData.get("pinned") === "on",
-    admin.id,
-  ]);
+  // One statement: the post and a notification for everyone else who is active, so neither can happen without the other.
+  // ref_id is the post, so the notifications can be removed again if the post is deleted.
+  await db().query(
+    `WITH p AS (INSERT INTO bulletin_posts (title, body, pinned, author_id) VALUES ($1, $2, $3, $4) RETURNING id)
+     INSERT INTO notifications (user_id, message, link, ref_id)
+     SELECT u.id, $5, '/#bulletin', p.id FROM users u, p WHERE u.active AND u.id <> $4`,
+    [title, body, formData.get("pinned") === "on", admin.id, `New team bulletin: ${title}`]
+  );
   revalidatePath("/");
 }
 
@@ -35,7 +37,9 @@ export async function deletePost(id: string) {
   await requireAdmin();
   if (!uuid(id)) return;
   await db().query("DELETE FROM bulletin_posts WHERE id = $1", [id]);
-  revalidatePath("/");
+  // A notification about a post that no longer exists would lead nowhere.
+  await db().query("DELETE FROM notifications WHERE ref_id = $1", [id]);
+  revalidatePath("/", "layout");
 }
 
 export async function createEvent(formData: FormData) {

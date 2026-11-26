@@ -13,7 +13,7 @@ Built:
   5 wrong passwords locks the account for 15 minutes
 - **Settings > Users (admins):** add users, copy a one-time invite link to send yourself, reset sign-in with a new link,
   change role, deactivate/reactivate (deactivating signs them out immediately)
-- Dashboard with team bulletin; Team calendar (week/month, four event types)
+- Dashboard with team bulletin (posting a bulletin, or adding new equipment, sends an in-app notification to every other active person, shown on the bell; deleting the post or item removes those notifications); Team calendar (week/month, four event types)
 - **Health and Safety** (visible to everyone): admins upload PDFs and new versions; staff open them. One version is marked
   current, previous versions are kept. Admins can archive a document (hidden from staff, nothing deleted) and restore it.
   Files are served only to signed-in users

@@ -184,7 +184,7 @@ async function storeManuals(client: PoolClient, equipmentId: string, manuals: Ma
 }
 
 export async function addEquipment(fd: FormData) {
-  await requireAdmin();
+  const admin = await requireAdmin();
   const f = readFields(fd);
   if (!f.name) redirect(`${ASSETS}&error=name`);
   const category = "general"; // no category is chosen when adding: new equipment gets the general checklist
@@ -205,6 +205,11 @@ export async function addEquipment(fd: FormData) {
     );
     await storeManuals(client, row.rows[0].id, pdfs.manuals, saved);
     await storeEquipmentImages(client, row.rows[0].id, imgs.photos, saved);
+    // Tell everyone else who is active, in the same transaction as the item. ref_id is the item, so it can be cleared on delete.
+    await client.query(
+      "INSERT INTO notifications (user_id, message, link, ref_id) SELECT id, $2, '/equipment?tab=assets', $3 FROM users WHERE active AND id <> $1",
+      [admin.id, `New equipment added: ${f.name}`, row.rows[0].id]
+    );
     await client.query("COMMIT");
   } catch (err) {
     await client.query("ROLLBACK");
@@ -307,6 +312,7 @@ export async function deleteEquipment(id: string, fd: FormData) {
     // Check answers and check photos go with their check (ON DELETE CASCADE); equipment pictures go with the item.
     await client.query("DELETE FROM equipment_checks WHERE equipment_id = $1", [id]);
     await client.query("DELETE FROM equipment WHERE id = $1", [id]);
+    await client.query("DELETE FROM notifications WHERE ref_id = $1", [id]);
     await client.query("COMMIT");
   } catch (err) {
     await client.query("ROLLBACK");
