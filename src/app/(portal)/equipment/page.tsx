@@ -2,7 +2,7 @@ import Link from "next/link";
 import { db } from "@/lib/db";
 import { requireUser } from "@/lib/auth";
 import { monthlyEquipmentStatus } from "@/lib/equipment";
-import { CATEGORIES, CHECKLISTS, ITEMS, MAX_EQUIPMENT_IMAGES, MAX_EQUIPMENT_MANUALS, RESULT_LABEL, isCategory, isItemKey, type CategoryKey, type Result } from "@/lib/equipment-shared";
+import { CATEGORIES, CHECKLISTS, ITEMS, MAX_EQUIPMENT_IMAGES, MAX_EQUIPMENT_MANUALS, MAX_EQUIPMENT_UPLOAD_BYTES, RESULT_LABEL, isCategory, isItemKey, type CategoryKey, type Result } from "@/lib/equipment-shared";
 import { MAX_IMAGE_BYTES, MAX_UPLOAD_BYTES } from "@/lib/job-images-shared";
 import { MAX_PDF_BYTES, storageConfigured } from "@/lib/storage";
 import { CheckForm } from "./CheckForm";
@@ -19,7 +19,7 @@ const ERRORS: Record<string, string> = {
   notpdf: "One of the files is not a PDF. Manuals must be PDF files. Nothing was saved.",
   storage: "File storage is not set up yet, so manuals and pictures cannot be uploaded. The equipment can still be added without them.",
   manualmany: `An item can have up to ${MAX_EQUIPMENT_MANUALS} manuals. Remove some first, or add fewer. Nothing was saved.`,
-  manualtotal: `Those files are too large together (the limit is ${MAX_UPLOAD_BYTES / 1024 / 1024} MB at a time for manuals and pictures). Nothing was saved.`,
+  manualtotal: `Those files are too large together (the limit is ${MAX_EQUIPMENT_UPLOAD_BYTES / 1024 / 1024} MB at a time for manuals and pictures). Nothing was saved.`,
   imgmany: `An item can have up to ${MAX_EQUIPMENT_IMAGES} pictures. Remove some first, or add fewer. Nothing was saved.`,
   imgtotal: `Those pictures are too large together (the limit is ${MAX_UPLOAD_BYTES / 1024 / 1024} MB at a time). Nothing was saved.`,
   imgbig: `One of the pictures is too large. The limit is ${MAX_IMAGE_BYTES / 1024 / 1024} MB per picture. Nothing was saved.`,

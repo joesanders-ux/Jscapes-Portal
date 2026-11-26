@@ -5,7 +5,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { db } from "@/lib/db";
 import { requireAdmin, requireUser } from "@/lib/auth";
-import { CATEGORIES, ITEMS, MAX_CHECK_PHOTOS, MAX_EQUIPMENT_IMAGES, MAX_EQUIPMENT_MANUALS, isChecklist, isOptionalItem, type Result } from "@/lib/equipment-shared";
+import { CATEGORIES, ITEMS, MAX_CHECK_PHOTOS, MAX_EQUIPMENT_IMAGES, MAX_EQUIPMENT_MANUALS, MAX_EQUIPMENT_UPLOAD_BYTES, isChecklist, isOptionalItem, type Result } from "@/lib/equipment-shared";
 import { processImage, type ProcessedImage } from "@/lib/job-images";
 import { MAX_IMAGE_BYTES, MAX_UPLOAD_BYTES } from "@/lib/job-images-shared";
 import { deleteFile, readPdfUpload, saveFile, storageConfigured } from "@/lib/storage";
@@ -156,7 +156,7 @@ type Manual = { buf: Buffer; name: string };
 
 /** Manuals and pictures arrive in one request, so together they must stay under the upload limit. */
 const uploadTooBig = (fd: FormData) =>
-  [...fd.getAll("manual"), ...fd.getAll("images")].reduce<number>((n, f) => n + (f instanceof File ? f.size : 0), 0) > MAX_UPLOAD_BYTES;
+  [...fd.getAll("manual"), ...fd.getAll("images")].reduce<number>((n, f) => n + (f instanceof File ? f.size : 0), 0) > MAX_EQUIPMENT_UPLOAD_BYTES;
 
 /** Reads and checks the PDFs on an equipment form: each must really be a PDF, and the item can have at most MAX_EQUIPMENT_MANUALS. */
 async function readManuals(fd: FormData, already: number): Promise<{ manuals: Manual[] } | { error: string }> {
@@ -164,7 +164,7 @@ async function readManuals(fd: FormData, already: number): Promise<{ manuals: Ma
   if (files.length === 0) return { manuals: [] };
   if (!storageConfigured()) return { error: "storage" };
   if (already + files.length > MAX_EQUIPMENT_MANUALS) return { error: "manualmany" };
-  if (files.reduce((n, f) => n + f.size, 0) > MAX_UPLOAD_BYTES) return { error: "manualtotal" };
+  if (files.reduce((n, f) => n + f.size, 0) > MAX_EQUIPMENT_UPLOAD_BYTES) return { error: "manualtotal" };
   const manuals: Manual[] = [];
   for (const f of files) {
     const pdf = await readPdfUpload(f);

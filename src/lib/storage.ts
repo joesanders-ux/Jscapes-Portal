@@ -17,7 +17,7 @@ export function storageRoot(): string | null {
   return path.resolve(process.cwd(), ".data");
 }
 
-export const MAX_PDF_BYTES = 15 * 1024 * 1024;
+export const MAX_PDF_BYTES = 50 * 1024 * 1024;
 
 export const storageConfigured = () => storageRoot() !== null;
 

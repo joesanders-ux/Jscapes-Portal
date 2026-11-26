@@ -48,3 +48,5 @@ export const MAX_CHECK_PHOTOS = 5;
 export const MAX_EQUIPMENT_IMAGES = 10;
 /** Most manuals (PDFs) one item on the Equipment list can have. */
 export const MAX_EQUIPMENT_MANUALS = 10;
+/** Most the manuals and pictures on one equipment form can total (one request). Kept under the server-action body limit in next.config.mjs. */
+export const MAX_EQUIPMENT_UPLOAD_BYTES = 100 * 1024 * 1024;
