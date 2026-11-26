@@ -8,7 +8,7 @@ import { MAX_PDF_BYTES, storageConfigured } from "@/lib/storage";
 import { CheckForm } from "./CheckForm";
 import { addEquipment, deleteEquipment, setEquipmentActive, updateEquipment, updateSpareParts } from "./actions";
 
-type Search = { open?: string; n?: string; tab?: string; equipment?: string; category?: string; month?: string; issues?: string; error?: string; done?: string };
+type Search = { q?: string; open?: string; n?: string; tab?: string; equipment?: string; category?: string; month?: string; issues?: string; error?: string; done?: string };
 
 const ERRORS: Record<string, string> = {
   name: "Enter a name for the equipment.",
@@ -82,7 +82,7 @@ export default async function EquipmentPage({ searchParams }: { searchParams: Se
 
       {tab === "check" && <CheckTab isAdmin={isAdmin} preselect={searchParams.equipment} />}
       {tab === "history" && <HistoryTab search={searchParams} />}
-      {tab === "assets" && <AssetsTab isAdmin={isAdmin} openId={searchParams.open} formKey={searchParams.done === "added" ? `added-${searchParams.n ?? ""}` : "form"} />}
+      {tab === "assets" && <AssetsTab isAdmin={isAdmin} q={(searchParams.q ?? "").trim().slice(0, 100)} openId={searchParams.open} formKey={searchParams.done === "added" ? `added-${searchParams.n ?? ""}` : "form"} />}
     </div>
   );
 }
@@ -275,7 +275,7 @@ type Asset = {
   spare_parts_updated_at: Date | null; spare_parts_updated_by_name: string | null; images: { id: string; name: string }[];
 };
 
-async function AssetsTab({ isAdmin, formKey, openId }: { isAdmin: boolean; formKey: string; openId?: string }) {
+async function AssetsTab({ isAdmin, formKey, openId, q }: { isAdmin: boolean; formKey: string; openId?: string; q: string }) {
   // Staff see the active equipment. Admins also see deactivated items so they can restore them.
   const { rows } = await db().query<Asset>(
     `SELECT e.id, e.name, e.category, e.brand, e.model_serial, e.spare_parts, e.notes, e.active,
@@ -288,10 +288,13 @@ async function AssetsTab({ isAdmin, formKey, openId }: { isAdmin: boolean; formK
             (SELECT count(*)::int FROM equipment_checks c WHERE c.equipment_id = e.id) AS check_count
        FROM equipment e
        LEFT JOIN users su ON su.id = e.spare_parts_updated_by
-      WHERE e.active OR $1::boolean
+      WHERE (e.active OR $1::boolean)
+        AND ($2 = '' OR e.name ILIKE $2 OR e.brand ILIKE $2 OR e.model_serial ILIKE $2 OR e.spare_parts ILIKE $2 OR e.notes ILIKE $2)
       ORDER BY e.active DESC, lower(e.name)`,
-    [isAdmin]
+    // The search text is escaped so that % and _ typed by a person match themselves, not "anything".
+    [isAdmin, q ? `%${q.replace(/[\\%_]/g, "\\$&")}%` : ""]
   );
+  const total = (await db().query<{ n: number }>("SELECT count(*)::int AS n FROM equipment WHERE active OR $1::boolean", [isAdmin])).rows[0].n;
   const storage = storageConfigured();
 
   return (
@@ -332,8 +335,24 @@ async function AssetsTab({ isAdmin, formKey, openId }: { isAdmin: boolean; formK
         </details>
       )}
 
+      {total > 0 && (
+        <form method="get" role="search" className="flex flex-wrap items-end gap-3">
+          <input type="hidden" name="tab" value="assets" />
+          <label className="flex min-w-0 flex-1 basis-64 flex-col gap-1 text-sm font-medium">Search equipment
+            <input type="search" name="q" defaultValue={q} maxLength={100} placeholder="Name, brand, model, spare parts or notes" autoComplete="off" className={field} />
+          </label>
+          <button className="inline-flex min-w-24 items-center justify-center rounded bg-brand px-5 py-2 font-medium text-brand-ink hover:bg-brand-dark">Search</button>
+          {q && <Link href="/equipment?tab=assets" className="inline-flex min-w-24 items-center justify-center rounded border border-line bg-white px-5 py-2 font-medium hover:bg-brand-soft">Clear</Link>}
+        </form>
+      )}
+      {q && total > 0 && (
+        <p role="status" className="text-sm text-ink-muted">
+          {rows.length === 0 ? `No equipment matches "${q}".` : `Showing ${rows.length} of ${total} ${total === 1 ? "item" : "items"} matching "${q}".`}
+        </p>
+      )}
+
       {rows.length === 0 ? (
-        <p className="text-ink-muted">No equipment yet.{isAdmin ? " Add the first item above." : " An administrator will add it."}</p>
+        total > 0 ? null : <p className="text-ink-muted">No equipment yet.{isAdmin ? " Add the first item above." : " An administrator will add it."}</p>
       ) : (
         (Object.keys(CATEGORIES) as CategoryKey[]).map((cat, _i, all) => {
           const group = rows.filter((r) => r.category === cat);
@@ -347,7 +366,7 @@ async function AssetsTab({ isAdmin, formKey, openId }: { isAdmin: boolean; formK
                 {group.map((e) => (
                   <li key={e.id} className="rounded-lg border border-line bg-surface-raised">
                     {/* One line per item; the full details open underneath. Native details/summary, so it also works from the keyboard. */}
-                    <details open={openId === e.id} className="group">
+                    <details open={openId === e.id || (q !== "" && rows.length === 1)} className="group">
                     <summary className="flex min-h-11 cursor-pointer list-none flex-wrap items-center gap-x-3 gap-y-1 px-4 py-3 [&::-webkit-details-marker]:hidden">
                       <span aria-hidden="true" className="inline-block transition-transform group-open:rotate-90">▸</span>
                       <h3 className="font-semibold">{e.name}</h3>
