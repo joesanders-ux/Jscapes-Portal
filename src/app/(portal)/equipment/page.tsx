@@ -80,14 +80,14 @@ export default async function EquipmentPage({ searchParams }: { searchParams: Se
       {error && <p role="alert" className="rounded border border-danger bg-white p-3 text-sm text-danger">{error}</p>}
       {done && <p role="status" className="rounded border border-brand bg-brand-soft p-3 text-sm">{done}</p>}
 
-      {tab === "check" && <CheckTab isAdmin={isAdmin} preselect={searchParams.equipment} />}
+      {tab === "check" && <CheckTab isAdmin={isAdmin} preselect={searchParams.equipment} nonce={searchParams.n ?? ""} />}
       {tab === "history" && <HistoryTab search={searchParams} />}
-      {tab === "assets" && <AssetsTab isAdmin={isAdmin} q={(searchParams.q ?? "").trim().slice(0, 100)} openId={searchParams.open} formKey={searchParams.done === "added" ? `added-${searchParams.n ?? ""}` : "form"} />}
+      {tab === "assets" && <AssetsTab isAdmin={isAdmin} q={(searchParams.q ?? "").trim().slice(0, 100)} openId={searchParams.open} nonce={searchParams.n ?? ""} formKey={searchParams.done === "added" ? `added-${searchParams.n ?? ""}` : "form"} />}
     </div>
   );
 }
 
-async function CheckTab({ isAdmin, preselect }: { isAdmin: boolean; preselect?: string }) {
+async function CheckTab({ isAdmin, preselect, nonce }: { isAdmin: boolean; preselect?: string; nonce: string }) {
   const { items, due, monthLabel } = await monthlyEquipmentStatus();
   const defaultEquipment = uuid(preselect) && items.some((e) => e.id === preselect) ? preselect : undefined;
   const preselectedItem = items.find((e) => e.id === defaultEquipment);
@@ -124,7 +124,7 @@ async function CheckTab({ isAdmin, preselect }: { isAdmin: boolean; preselect?: 
         {items.length === 0 && <p className="text-sm text-ink-muted">There is no equipment to check yet.</p>}
         {CHECKLISTS.map((key) => (
           // Opened automatically when someone arrives from a "Check this item" link for equipment of this type.
-          <details key={key} open={preselectedItem?.category === key} className="rounded-lg border border-line bg-surface-raised">
+          <details key={`${key}-${nonce}`} open={preselectedItem?.category === key} className="rounded-lg border border-line bg-surface-raised">
             <summary className="cursor-pointer p-4 text-lg font-semibold">{CATEGORIES[key].label}</summary>
             <div className="border-t border-line p-4">
               <CheckForm
@@ -275,7 +275,7 @@ type Asset = {
   spare_parts_updated_at: Date | null; spare_parts_updated_by_name: string | null; images: { id: string; name: string }[];
 };
 
-async function AssetsTab({ isAdmin, formKey, openId, q }: { isAdmin: boolean; formKey: string; openId?: string; q: string }) {
+async function AssetsTab({ isAdmin, formKey, openId, q, nonce }: { isAdmin: boolean; formKey: string; openId?: string; q: string; nonce: string }) {
   // Staff see the active equipment. Admins also see deactivated items so they can restore them.
   const { rows } = await db().query<Asset>(
     `SELECT e.id, e.name, e.category, e.brand, e.model_serial, e.spare_parts, e.notes, e.active,
@@ -364,7 +364,8 @@ async function AssetsTab({ isAdmin, formKey, openId, q }: { isAdmin: boolean; fo
               <h2 id={`cat-${cat}`} className={grouped ? "text-xl font-semibold" : "sr-only"}>{CATEGORIES[cat].label}</h2>
               <ul className="flex flex-col gap-3">
                 {group.map((e) => (
-                  <li key={e.id} className="rounded-lg border border-line bg-surface-raised">
+                  // The key changes after every save, so the item is rebuilt from the saved data: file boxes come back empty and new files appear in the list.
+                  <li key={`${e.id}-${nonce}`} className="rounded-lg border border-line bg-surface-raised">
                     {/* One line per item; the full details open underneath. Native details/summary, so it also works from the keyboard. */}
                     <details open={openId === e.id || (q !== "" && rows.length === 1)} className="group">
                     <summary className="flex min-h-11 cursor-pointer list-none flex-wrap items-center gap-x-3 gap-y-1 px-4 py-3 [&::-webkit-details-marker]:hidden">
