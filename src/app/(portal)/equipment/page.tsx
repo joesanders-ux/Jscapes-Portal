@@ -8,7 +8,7 @@ import { MAX_PDF_BYTES, storageConfigured } from "@/lib/storage";
 import { CheckForm } from "./CheckForm";
 import { addEquipment, deleteEquipment, setEquipmentActive, updateEquipment, updateSpareParts } from "./actions";
 
-type Search = { n?: string; tab?: string; equipment?: string; category?: string; month?: string; issues?: string; error?: string; done?: string };
+type Search = { open?: string; n?: string; tab?: string; equipment?: string; category?: string; month?: string; issues?: string; error?: string; done?: string };
 
 const ERRORS: Record<string, string> = {
   name: "Enter a name for the equipment.",
@@ -82,7 +82,7 @@ export default async function EquipmentPage({ searchParams }: { searchParams: Se
 
       {tab === "check" && <CheckTab isAdmin={isAdmin} preselect={searchParams.equipment} />}
       {tab === "history" && <HistoryTab search={searchParams} />}
-      {tab === "assets" && <AssetsTab isAdmin={isAdmin} formKey={searchParams.done === "added" ? `added-${searchParams.n ?? ""}` : "form"} />}
+      {tab === "assets" && <AssetsTab isAdmin={isAdmin} openId={searchParams.open} formKey={searchParams.done === "added" ? `added-${searchParams.n ?? ""}` : "form"} />}
     </div>
   );
 }
@@ -275,7 +275,7 @@ type Asset = {
   spare_parts_updated_at: Date | null; spare_parts_updated_by_name: string | null; images: { id: string; name: string }[];
 };
 
-async function AssetsTab({ isAdmin, formKey }: { isAdmin: boolean; formKey: string }) {
+async function AssetsTab({ isAdmin, formKey, openId }: { isAdmin: boolean; formKey: string; openId?: string }) {
   // Staff see the active equipment. Admins also see deactivated items so they can restore them.
   const { rows } = await db().query<Asset>(
     `SELECT e.id, e.name, e.category, e.brand, e.model_serial, e.spare_parts, e.notes, e.active,
@@ -297,8 +297,12 @@ async function AssetsTab({ isAdmin, formKey }: { isAdmin: boolean; formKey: stri
   return (
     <>
       {isAdmin && (
-        <form key={formKey} action={addEquipment} className="flex flex-col gap-3 rounded-lg border border-line bg-surface-raised p-4">
-          <h2 className="font-semibold">Add equipment</h2>
+        // Collapsed to keep the list in view. It stays open after an item is added, empty, ready for the next one.
+        <details key={formKey} open={formKey !== "form"} className="group rounded-lg border border-line bg-surface-raised">
+        <summary className="flex min-h-11 cursor-pointer list-none items-center gap-2 px-4 py-3 font-semibold [&::-webkit-details-marker]:hidden">
+          <span aria-hidden="true" className="inline-block transition-transform group-open:rotate-90">▸</span> Add equipment
+        </summary>
+        <form action={addEquipment} className="flex flex-col gap-3 border-t border-line p-4">
           <div className="grid gap-3 sm:grid-cols-2">
             <label className="flex flex-col gap-1 text-sm font-medium">Equipment name
               <input name="name" required maxLength={120} className={field} />
@@ -325,6 +329,7 @@ async function AssetsTab({ isAdmin, formKey }: { isAdmin: boolean; formKey: stri
           {!storage && <p className="text-sm text-warn">File storage is not set up yet, so manuals and pictures cannot be uploaded. Set <code>FILES_DIR</code> to a mounted volume first.</p>}
           <button className={primary}>Add equipment</button>
         </form>
+        </details>
       )}
 
       {rows.length === 0 ? (
@@ -340,12 +345,22 @@ async function AssetsTab({ isAdmin, formKey }: { isAdmin: boolean; formKey: stri
               <h2 id={`cat-${cat}`} className={grouped ? "text-xl font-semibold" : "sr-only"}>{CATEGORIES[cat].label}</h2>
               <ul className="flex flex-col gap-3">
                 {group.map((e) => (
-                  <li key={e.id} className="rounded-lg border border-line bg-surface-raised p-4">
-                    <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+                  <li key={e.id} className="rounded-lg border border-line bg-surface-raised">
+                    {/* One line per item; the full details open underneath. Native details/summary, so it also works from the keyboard. */}
+                    <details open={openId === e.id} className="group">
+                    <summary className="flex min-h-11 cursor-pointer list-none flex-wrap items-center gap-x-3 gap-y-1 px-4 py-3 [&::-webkit-details-marker]:hidden">
+                      <span aria-hidden="true" className="inline-block transition-transform group-open:rotate-90">▸</span>
                       <h3 className="font-semibold">{e.name}</h3>
+                      {e.brand && <span className="text-sm text-ink-muted">{e.brand}</span>}
                       {!e.active && <span className="rounded border border-line px-2 py-0.5 text-xs font-semibold text-ink-muted">Deactivated</span>}
-                    </div>
-                    <dl className="mt-2 grid gap-x-6 gap-y-1 text-sm sm:grid-cols-[10rem_1fr]">
+                      <span className="ml-auto flex flex-wrap gap-x-3 text-xs text-ink-muted">
+                        {e.manuals.length > 0 && <span>{e.manuals.length} {e.manuals.length === 1 ? "manual" : "manuals"}</span>}
+                        {e.images.length > 0 && <span>{e.images.length} {e.images.length === 1 ? "picture" : "pictures"}</span>}
+                        <span>{e.last_checked ? `Checked ${fmtDate(e.last_checked)}` : "Not checked yet"}</span>
+                      </span>
+                    </summary>
+                    <div className="border-t border-line p-4">
+                    <dl className="grid gap-x-6 gap-y-1 text-sm sm:grid-cols-[10rem_1fr]">
                       <dt className="text-ink-muted">Brand</dt>
                       <dd>{e.brand || "Not recorded"}</dd>
                       <dt className="text-ink-muted">Model / serial number</dt>
@@ -480,6 +495,8 @@ async function AssetsTab({ isAdmin, formKey }: { isAdmin: boolean; formKey: stri
                         </details>
                       </div>
                     )}
+                    </div>
+                    </details>
                   </li>
                 ))}
               </ul>

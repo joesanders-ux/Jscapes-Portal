@@ -274,7 +274,7 @@ export async function updateEquipment(id: string, fd: FormData) {
   for (const r of removingManuals) await deleteFile(r.storage_key);
   for (const r of removingImages) { await deleteFile(r.storage_key); await deleteFile(r.thumb_key); }
   revalidatePath("/equipment");
-  redirect(`${ASSETS}&done=updated`);
+  redirect(`${ASSETS}&done=updated&open=${id}`);
 }
 
 /** Deactivating hides an item from the check form and reminders. Its past checks are kept. */
@@ -284,7 +284,7 @@ export async function setEquipmentActive(id: string, active: boolean) {
   await db().query("UPDATE equipment SET active = $2 WHERE id = $1", [id, active]);
   revalidatePath("/equipment");
   revalidatePath("/");
-  redirect(`${ASSETS}&done=${active ? "restored" : "deactivated"}`);
+  redirect(`${ASSETS}&done=${active ? "restored" : "deactivated"}&open=${id}`);
 }
 
 /**
@@ -347,5 +347,5 @@ export async function updateSpareParts(id: string, fd: FormData) {
   );
   if (!res.rowCount) redirect(`${ASSETS}&error=missing`);
   revalidatePath("/equipment");
-  redirect(`${ASSETS}&done=spare`);
+  redirect(`${ASSETS}&done=spare&open=${id}`);
 }
